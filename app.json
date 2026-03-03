@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "TEZUKA",
+    "slug": "tezuka",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tezuka72.tezuka",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.tezuka72.tezuka",
+      "versionCode": 1
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "153901d4-f731-4ba8-81dd-152202543482"
+      },
+      "STRIPE_PUBLISHABLE_KEY": "pk_test_51T22jJLFD35UHfl9nliQh1W4e9EFvgGdq3f2N7MI1JL9JAMwkwRTiBjm4vZITo7T9ubkAFNDO9kHGzkosIYaJ1da00R2F59lLK"
+    }
+  }
+}
