@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -6,120 +6,291 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  RefreshControl,
   Dimensions,
+  Animated,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import { feedAPI, postAPI, adAPI, bookmarkAPI } from '../api/client';
-import AdCard from '../components/AdCard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { feedAPI, postAPI, bookmarkAPI } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
-import { Shadows } from '../theme/styles';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const TAB_BAR_HEIGHT = 60;
 
-// 投稿カードコンポーネント
-function PostCard({ post, onPress, onLike, onBookmark }) {
-  const { t } = useLanguage();
-  const firstImage = post.images?.[0]?.image_url || post.images?.[0];
-  const imageCount = post.images?.length || 0;
-  
+// =====================
+// 単一投稿フルスクリーンアイテム
+// =====================
+const PostItem = memo(function PostItem({ post, navigation }) {
+  const insets = useSafeAreaInsets();
+  const [isLiked, setIsLiked] = useState(post.is_liked || false);
+  const [likeCount, setLikeCount] = useState(post.like_count || 0);
+  const [isBookmarked, setIsBookmarked] = useState(post.is_bookmarked || false);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // ダブルタップ検出
+  const lastTap = useRef(null);
+  // ハートアニメーション
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
+
+  const showHeartAnimation = () => {
+    heartScale.setValue(0);
+    heartOpacity.setValue(1);
+    Animated.sequence([
+      Animated.spring(heartScale, {
+        toValue: 1.2,
+        useNativeDriver: true,
+        tension: 60,
+        friction: 5,
+      }),
+      Animated.timing(heartScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.delay(400),
+      Animated.timing(heartOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const triggerLike = async () => {
+    if (!isLiked) {
+      showHeartAnimation();
+      setIsLiked(true);
+      setLikeCount((c) => c + 1);
+      try {
+        await postAPI.like(post.id);
+      } catch {
+        setIsLiked(false);
+        setLikeCount((c) => Math.max(0, c - 1));
+      }
+    }
+  };
+
+  const handleTap = () => {
+    const now = Date.now();
+    if (lastTap.current && now - lastTap.current < 350) {
+      triggerLike();
+      lastTap.current = null;
+    } else {
+      lastTap.current = now;
+    }
+  };
+
+  const handleLikeButton = async () => {
+    if (isLiked) {
+      setIsLiked(false);
+      setLikeCount((c) => Math.max(0, c - 1));
+      try {
+        await postAPI.unlike(post.id);
+      } catch {
+        setIsLiked(true);
+        setLikeCount((c) => c + 1);
+      }
+    } else {
+      triggerLike();
+    }
+  };
+
+  const handleBookmark = async () => {
+    const next = !isBookmarked;
+    setIsBookmarked(next);
+    try {
+      if (next) {
+        await bookmarkAPI.add(post.id);
+      } else {
+        await bookmarkAPI.remove(post.id);
+      }
+    } catch {
+      setIsBookmarked(!next);
+    }
+  };
+
+  const images = post.images || [];
+  const pageCount = images.length;
+  const bottomPad = TAB_BAR_HEIGHT + insets.bottom + 16;
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={0.9}
-    >
-      {firstImage && (
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: firstImage }}
-            style={styles.image}
-            resizeMode="cover"
+    <TouchableWithoutFeedback onPress={handleTap}>
+      <View style={styles.postItem}>
+
+        {/* ===== 画像ページャー（横スクロール） ===== */}
+        {pageCount > 0 ? (
+          <FlatList
+            data={images}
+            keyExtractor={(_, i) => i.toString()}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={pageCount > 1}
+            onMomentumScrollEnd={(e) => {
+              const page = Math.round(
+                e.nativeEvent.contentOffset.x / SCREEN_WIDTH
+              );
+              setCurrentPage(page);
+            }}
+            renderItem={({ item }) => (
+              <Image
+                source={{ uri: item.image_url || item }}
+                style={styles.pageImage}
+                resizeMode="contain"
+              />
+            )}
+            getItemLayout={(_, index) => ({
+              length: SCREEN_WIDTH,
+              offset: SCREEN_WIDTH * index,
+              index,
+            })}
+            removeClippedSubviews
           />
-          {imageCount > 1 && (
-            <View style={styles.imageCounter}>
-              <Text style={styles.imageCounterText}>{imageCount}{t('home.imageCountSuffix')}</Text>
-            </View>
-          )}
+        ) : (
+          <View style={styles.noImage}>
+            <Ionicons name="image-outline" size={48} color={Colors.muted} />
+          </View>
+        )}
+
+        {/* ===== ダブルタップ ハートエフェクト ===== */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.heartOverlay,
+            { opacity: heartOpacity, transform: [{ scale: heartScale }] },
+          ]}
+        >
+          <Text style={styles.heartEmoji}>❤️</Text>
+        </Animated.View>
+
+        {/* ===== 下部グラデーションオーバーレイ ===== */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.85)']}
+          style={[styles.bottomGradient, { height: 260 + bottomPad }]}
+          pointerEvents="none"
+        />
+
+        {/* ===== 右サイドバー ===== */}
+        <View style={[styles.sidebar, { bottom: bottomPad + 8 }]}>
+          {/* いいね */}
+          <TouchableOpacity
+            style={styles.sideBtn}
+            onPress={handleLikeButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={32}
+              color={isLiked ? '#FF3B5C' : '#FFFFFF'}
+            />
+            <Text style={styles.sideBtnLabel}>{likeCount}</Text>
+          </TouchableOpacity>
+
+          {/* コメント */}
+          <TouchableOpacity
+            style={styles.sideBtn}
+            onPress={() => navigation?.navigate('PostDetail', { postId: post.id })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbubble-outline" size={30} color="#FFFFFF" />
+            <Text style={styles.sideBtnLabel}>{post.comment_count || 0}</Text>
+          </TouchableOpacity>
+
+          {/* 保存 */}
+          <TouchableOpacity
+            style={styles.sideBtn}
+            onPress={handleBookmark}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={30}
+              color={isBookmarked ? Colors.accent : '#FFFFFF'}
+            />
+          </TouchableOpacity>
         </View>
-      )}
-      
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {post.creator_name?.[0]?.toUpperCase() || '?'}
+
+        {/* ===== 左下 作者・タイトル情報 ===== */}
+        <View style={[styles.bottomInfo, { paddingBottom: bottomPad }]}>
+          <View style={styles.authorRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(post.display_name || post.creator_name)?.[0]?.toUpperCase() || '?'}
+              </Text>
+            </View>
+            <Text style={styles.authorName} numberOfLines={1}>
+              {post.display_name || post.creator_name || post.username}
             </Text>
           </View>
-          <View style={styles.headerText}>
-            <Text style={styles.displayName}>{post.creator_name}</Text>
-            <Text style={styles.username}>@{post.creator_username}</Text>
-          </View>
-        </View>
 
-        <Text style={styles.title}>{post.title}</Text>
-        {post.description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {post.description}
+          {post.series_title ? (
+            <View style={styles.seriesBadge}>
+              <Ionicons name="book-outline" size={11} color="#FFFFFF" />
+              <Text style={styles.seriesBadgeText}> {post.series_title}</Text>
+            </View>
+          ) : null}
+
+          <Text style={styles.postTitle} numberOfLines={2}>
+            {post.title}
           </Text>
-        )}
 
-        {post.series_title && (
-          <View style={styles.seriesBadge}>
-            <Text style={styles.seriesText}>📚 {post.series_title}</Text>
-          </View>
-        )}
-
-        <View style={styles.stats}>
-          <TouchableOpacity style={styles.statItem} onPress={onLike}>
-            <Text style={styles.statIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.statText}>{post.like_count || 0}</Text>
-          </TouchableOpacity>
-          <View style={styles.statItem}>
-            <Text style={styles.statIcon}>💬</Text>
-            <Text style={styles.statText}>{post.comment_count || 0}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statIcon}>👁️</Text>
-            <Text style={styles.statText}>{post.view_count || 0}</Text>
-          </View>
-          <TouchableOpacity style={[styles.statItem, styles.bookmarkItem]} onPress={onBookmark}>
-            <Text style={styles.statIcon}>{post.is_bookmarked ? '🔖' : '🏷️'}</Text>
-          </TouchableOpacity>
+          {post.description ? (
+            <Text style={styles.postDesc} numberOfLines={2}>
+              {post.description}
+            </Text>
+          ) : null}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
+        {/* ===== ページインジケーター（縦ドット）===== */}
+        {pageCount > 1 && (
+          <View style={[styles.pageIndicator, { top: insets.top + 12 }]}>
+            {images.map((_, i) => (
+              <View
+                key={i}
+                style={[styles.dot, i === currentPage && styles.dotActive]}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* ===== ページ番号バッジ ===== */}
+        {pageCount > 1 && (
+          <View style={[styles.pageCounter, { top: insets.top + 12 }]}>
+            <Text style={styles.pageCounterText}>
+              {currentPage + 1} / {pageCount}
+            </Text>
+          </View>
+        )}
+      </View>
+    </TouchableWithoutFeedback>
+  );
+});
+
+// =====================
+// メインスクリーン
+// =====================
 export default function HomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [posts, setPosts] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [ad, setAd] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadPosts();
-    loadAd();
   }, []);
-
-  const loadAd = async () => {
-    try {
-      const response = await adAPI.getRandom();
-      setAd(response);
-    } catch (error) {
-      console.error('Load ad error:', error);
-    }
-  };
 
   const loadPosts = async () => {
     try {
       setError('');
       const response = await feedAPI.getFeed();
       setPosts(response.posts || []);
-    } catch (error) {
-      console.error('Load posts error:', error);
+    } catch (e) {
+      console.error('Load posts error:', e);
       setError(t('home.loadError'));
     }
   };
@@ -130,212 +301,252 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const handlePostPress = (post) => {
-    navigation?.navigate('PostDetail', { postId: post.id });
-  };
+  const renderItem = useCallback(
+    ({ item }) => <PostItem post={item} navigation={navigation} />,
+    [navigation]
+  );
 
-  const handleLike = async (postId) => {
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (post?.is_liked) {
-        await postAPI.unlike(postId);
-      } else {
-        await postAPI.like(postId);
-      }
-      loadPosts();
-    } catch (error) {
-      console.error('Like error:', error);
-      setError(t('home.likeError'));
-    }
-  };
+  const getItemLayout = useCallback(
+    (_, index) => ({
+      length: SCREEN_HEIGHT,
+      offset: SCREEN_HEIGHT * index,
+      index,
+    }),
+    []
+  );
 
-  const handleBookmark = async (postId) => {
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (post?.is_bookmarked) {
-        await bookmarkAPI.remove(postId);
-      } else {
-        await bookmarkAPI.add(postId);
-      }
-      // ローカルで状態を更新（再フェッチ不要）
-      setPosts(prev =>
-        prev.map(p => p.id === postId ? { ...p, is_bookmarked: !p.is_bookmarked } : p)
-      );
-    } catch (error) {
-      console.error('Bookmark error:', error);
-    }
-  };
+  if (error && posts.length === 0) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📡</Text>
+          <Text style={styles.emptyTitle}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadPosts}>
+            <Text style={styles.retryText}>再試行</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <PostCard
-            post={item}
-            onPress={() => handlePostPress(item)}
-            onLike={() => handleLike(item.id)}
-            onBookmark={() => handleBookmark(item.id)}
-          />
-        )}
-        ListHeaderComponent={() => (
-          ad ? <AdCard ad={ad} /> : null
-        )}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={Colors.primary}
-          />
-        }
-        contentContainerStyle={styles.listContent}
+        renderItem={renderItem}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        decelerationRate="fast"
+        getItemLayout={getItemLayout}
+        // パフォーマンス設定
+        initialNumToRender={2}
+        maxToRenderPerBatch={3}
+        windowSize={5}          // 前後2投稿をプリロード
+        removeClippedSubviews
+        // プルリフレッシュ
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
       />
     </View>
   );
 }
 
+// =====================
+// スタイル
+// =====================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000',
   },
-  listContent: {
-    padding: 16,
+
+  // ---- 投稿アイテム ----
+  postItem: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#000',
   },
-  card: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-    ...Shadows.medium,
+  pageImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#000',
   },
-  imageContainer: {
-    width: '100%',
-    height: SCREEN_WIDTH - 32,
-    position: 'relative',
+  noImage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#111',
   },
-  image: {
-    width: '100%',
-    height: '100%',
+
+  // ---- ハートエフェクト ----
+  heartOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  imageCounter: {
+  heartEmoji: {
+    fontSize: 100,
+  },
+
+  // ---- グラデーション ----
+  bottomGradient: {
     position: 'absolute',
-    top: 12,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+
+  // ---- 右サイドバー ----
+  sidebar: {
+    position: 'absolute',
     right: 12,
-    backgroundColor: 'rgba(10, 10, 15, 0.8)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    alignItems: 'center',
   },
-  imageCounterText: {
-    color: Colors.foreground,
+  sideBtn: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sideBtnLabel: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginTop: 3,
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  content: {
-    padding: 16,
+
+  // ---- 下部情報 ----
+  bottomInfo: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 72,
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
-  header: {
+  authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginRight: 10,
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 'bold',
   },
-  headerText: {
+  authorName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
     flex: 1,
   },
-  displayName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.foreground,
-  },
-  username: {
-    fontSize: 14,
-    color: Colors.muted,
-    marginTop: 2,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.foreground,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: Colors.muted,
-    marginBottom: 12,
-    lineHeight: 20,
-  },
   seriesBadge: {
-    backgroundColor: 'rgba(183, 108, 200, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(183, 108, 200, 0.3)',
-  },
-  seriesText: {
-    fontSize: 12,
-    color: Colors.violet,
-    fontWeight: '600',
-  },
-  stats: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: 12,
-  },
-  statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
+    backgroundColor: 'rgba(37,99,235,0.85)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 6,
   },
-  statIcon: {
-    fontSize: 18,
-    marginRight: 6,
-  },
-  statText: {
-    fontSize: 14,
-    color: Colors.muted,
+  seriesBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
     fontWeight: '600',
   },
-  bookmarkItem: {
-    marginLeft: 'auto',
-    marginRight: 0,
+  postTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  errorContainer: {
-    backgroundColor: '#FFE0E0',
-    paddingHorizontal: 16,
+  postDesc: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    lineHeight: 18,
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+
+  // ---- ページインジケーター ----
+  pageIndicator: {
+    position: 'absolute',
+    right: 10,
+    alignItems: 'center',
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    marginBottom: 3,
+  },
+  dotActive: {
+    height: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  pageCounter: {
+    position: 'absolute',
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pageCounterText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // ---- エラー / 空 ----
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    color: Colors.muted,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 32,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FF6B6B',
+    borderRadius: 24,
   },
-  errorText: {
-    color: '#C92A2A',
-    fontSize: 14,
-    fontWeight: '500',
+  retryText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
