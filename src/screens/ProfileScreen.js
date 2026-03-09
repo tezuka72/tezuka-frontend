@@ -8,19 +8,41 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { userAPI, bookmarkAPI, libraryAPI } from '../api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { userAPI, bookmarkAPI, libraryAPI, postAPI } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
 import LibraryBookCard from '../components/LibraryBookCard';
 
-// 投稿ミニカード（既存）
-function MiniPostCard({ post, onPress }) {
+// 投稿ミニカード
+function MiniPostCard({ post, onPress, onDelete }) {
   const firstImage = post.images?.[0]?.image_url || post.images?.[0];
+
+  const handleLongPress = () => {
+    if (!onDelete) return;
+    Alert.alert(
+      '投稿を削除',
+      `「${post.title}」を削除しますか？\nこの操作は取り消せません。`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '削除', style: 'destructive', onPress: onDelete },
+      ]
+    );
+  };
+
   return (
-    <TouchableOpacity style={styles.miniCard} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={styles.miniCard}
+      onPress={onPress}
+      onLongPress={handleLongPress}
+      activeOpacity={0.85}
+      delayLongPress={400}
+    >
       {firstImage ? (
         <Image source={{ uri: firstImage }} style={styles.miniImage} resizeMode="cover" />
       ) : (
@@ -29,6 +51,11 @@ function MiniPostCard({ post, onPress }) {
         </View>
       )}
       <Text style={styles.miniTitle} numberOfLines={1}>{post.title}</Text>
+      {onDelete && (
+        <View style={styles.deleteHint}>
+          <Ionicons name="ellipsis-horizontal" size={12} color={Colors.muted} />
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -172,6 +199,7 @@ function LibraryTab({ navigation }) {
 
 // ── メイン ProfileScreen ─────────────────────────────
 export default function ProfileScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { username } = route.params;
   const { lang, toggleLanguage, t } = useLanguage();
   const { user: currentUser } = useAuth();
@@ -218,9 +246,22 @@ export default function ProfileScreen({ route, navigation }) {
     navigation?.navigate('PostDetail', { postId: post.id });
   };
 
+  const handleDeletePost = async (postId) => {
+    try {
+      await postAPI.delete(postId);
+      setProfile(prev => ({
+        ...prev,
+        posts: prev.posts.filter(p => p.id !== postId),
+      }));
+    } catch (e) {
+      console.error('Delete post error:', e);
+      Alert.alert('エラー', '削除に失敗しました。もう一度お試しください。');
+    }
+  };
+
   if (!profile) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         {error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
@@ -232,7 +273,7 @@ export default function ProfileScreen({ route, navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
@@ -324,6 +365,7 @@ export default function ProfileScreen({ route, navigation }) {
                   key={post.id}
                   post={post}
                   onPress={() => handlePostPress(post)}
+                  onDelete={isOwnProfile ? () => handleDeletePost(post.id) : undefined}
                 />
               ))}
             </View>
@@ -551,6 +593,14 @@ const styles = StyleSheet.create({
     color: Colors.foreground,
     fontWeight: '600',
     padding: 8,
+  },
+  deleteHint: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 10,
+    padding: 3,
   },
   // 空状態
   emptyContainer: {

@@ -1,10 +1,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ローカル開発環境
+// 開発時はlocalhost、本番はRenderを使用
 const API_BASE_URL = __DEV__
-  ? 'http://localhost:3000/api/v1'       // Webブラウザテスト（Mac）
-  : 'https://tezuka-backend.onrender.com/api/v1'; // 本番
+  ? 'http://localhost:3000/api/v1'
+  : 'https://tezuka-backend-1.onrender.com/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -62,11 +62,23 @@ export const authAPI = {
     const response = await api.get('/auth/verify');
     return response.data;
   },
+  forgotPassword: async (email) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+  resetPassword: async (email, code, newPassword) => {
+    const response = await api.post('/auth/reset-password', { email, code, newPassword });
+    return response.data;
+  },
 };
 
 export const userAPI = {
   getProfile: async (userId) => {
     const response = await api.get(`/users/${userId}`);
+    return response.data;
+  },
+  getFollowing: async () => {
+    const response = await api.get('/users/me/following');
     return response.data;
   },
 };
@@ -92,13 +104,33 @@ export const postAPI = {
     const response = await api.post(`/posts/${postId}/comments`, { content });
     return response.data;
   },
-  create: async (postData) => {
-    const response = await api.post('/posts', postData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+  delete: async (postId) => {
+    const response = await api.delete(`/posts/${postId}`);
     return response.data;
+  },
+  create: async (postData) => {
+    // axiosはwebでFormDataのContent-Typeを正しく扱えない場合があるためfetchを使用
+    const token = await AsyncStorage.getItem('authToken');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    let res;
+    try {
+      res = await fetch(`${API_BASE_URL}/posts`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: postData,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const e = new Error(err.error || err.errors?.[0]?.msg || 'Failed to create post');
+      e.response = { status: res.status, data: err };
+      throw e;
+    }
+    return res.json();
   },
 };
 
@@ -194,6 +226,11 @@ export const adAPI = {
     const response = await api.get('/ads/random');
     return response.data;
   },
+};
+
+// Render無料プランのスリープ対策: バックグラウンドでサーバーを起こす（awaitしない）
+export const wakeupServer = () => {
+  axios.get(API_BASE_URL.replace('/api/v1', '') + '/health', { timeout: 60000 }).catch(() => {});
 };
 
 // EN（応援エネルギー）残高・応援送信
@@ -301,6 +338,95 @@ export const libraryAPI = {
     const response = await api.post(`/series/${seriesId}/progress`, {
       last_episode_id: lastEpisodeId,
     });
+    return response.data;
+  },
+};
+
+// アフィリエイト
+export const affiliateAPI = {
+  searchProducts: async (query, limit = 10) => {
+    const response = await api.get('/affiliate/products/search', { params: { q: query, limit } });
+    return response.data;
+  },
+  tagProduct: async (productData) => {
+    const response = await api.post('/affiliate/products/tag', productData);
+    return response.data;
+  },
+  getPostProducts: async (postId) => {
+    const response = await api.get(`/affiliate/products/post/${postId}`);
+    return response.data;
+  },
+  recordClick: async (productId, platform) => {
+    const response = await api.post('/affiliate/click', { product_id: productId, platform });
+    return response.data;
+  },
+};
+
+// メッセージ（DM / グループDM）
+export const messageAPI = {
+  getConversations: async () => {
+    const response = await api.get('/messages/conversations');
+    return response.data;
+  },
+  createConversation: async (participantIds, type, name = null) => {
+    const response = await api.post('/messages/conversations', {
+      participant_ids: participantIds,
+      type,
+      name,
+    });
+    return response.data;
+  },
+  getMessages: async (convId, before = null) => {
+    const params = { limit: 30 };
+    if (before) params.before = before;
+    const response = await api.get(`/messages/conversations/${convId}/messages`, { params });
+    return response.data;
+  },
+  sendMessage: async (convId, content, replyToId = null) => {
+    const response = await api.post(`/messages/conversations/${convId}/messages`, {
+      content,
+      reply_to_id: replyToId,
+    });
+    return response.data;
+  },
+  deleteMessage: async (msgId) => {
+    const response = await api.delete(`/messages/${msgId}`);
+    return response.data;
+  },
+  addReaction: async (msgId, emoji) => {
+    const response = await api.post(`/messages/${msgId}/reactions`, { emoji });
+    return response.data;
+  },
+  removeReaction: async (msgId, emoji) => {
+    const response = await api.delete(`/messages/${msgId}/reactions/${encodeURIComponent(emoji)}`);
+    return response.data;
+  },
+  markRead: async (convId) => {
+    const response = await api.put(`/messages/conversations/${convId}/read`);
+    return response.data;
+  },
+};
+
+// 出金（銀行口座登録・出金申請）
+export const payoutAPI = {
+  getBankAccount: async () => {
+    const response = await api.get('/payout/bank-account');
+    return response.data;
+  },
+  saveBankAccount: async (data) => {
+    const response = await api.post('/payout/bank-account', data);
+    return response.data;
+  },
+  getBalance: async () => {
+    const response = await api.get('/payout/balance');
+    return response.data;
+  },
+  requestWithdrawal: async (amount) => {
+    const response = await api.post('/payout/withdraw', { amount });
+    return response.data;
+  },
+  getHistory: async () => {
+    const response = await api.get('/payout/history');
     return response.data;
   },
 };
