@@ -8,15 +8,21 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const LOGO = require('../../assets/logo.png');
 import { Colors } from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const headingFontSize = SCREEN_WIDTH < 480 ? 40 : Platform.OS === 'web' ? 72 : 56;
+const headingLineHeight = SCREEN_WIDTH < 480 ? 50 : Platform.OS === 'web' ? 80 : 64;
 
 export default function LandingScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { lang, toggleLanguage, t } = useLanguage();
+  const { browseAsGuest } = useAuth();
 
   return (
     <LinearGradient
@@ -26,27 +32,31 @@ export default function LandingScreen({ navigation }) {
     >
 
       {/* ナビゲーションバー */}
-      <View style={styles.navbar}>
+      <View style={[styles.navbar, { paddingTop: insets.top || (Platform.OS === 'web' ? 20 : 56) }]}>
         <View style={styles.logoContainer}>
           <Image source={LOGO} style={styles.logoIcon} resizeMode="contain" />
-          <Text style={styles.logoText}>TEZUKA</Text>
+          <Text style={styles.logoText}>LORE MANGA</Text>
         </View>
         <View style={styles.navButtons}>
           <TouchableOpacity style={styles.langToggleButton} onPress={toggleLanguage}>
             <Text style={styles.langToggleText}>🌐 {lang === 'ja' ? 'EN' : 'JP'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navLoginButton}
-            onPress={() => navigation?.navigate('Login')}
-          >
-            <Text style={styles.navLoginText}>{t('landing.login')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navRegisterButton}
-            onPress={() => navigation?.navigate('Register')}
-          >
-            <Text style={styles.navRegisterText}>{t('landing.startFree')}</Text>
-          </TouchableOpacity>
+          {SCREEN_WIDTH >= 480 && (
+            <TouchableOpacity
+              style={styles.navLoginButton}
+              onPress={() => navigation?.navigate('Login')}
+            >
+              <Text style={styles.navLoginText}>{t('landing.login')}</Text>
+            </TouchableOpacity>
+          )}
+          {SCREEN_WIDTH >= 480 && (
+            <TouchableOpacity
+              style={styles.navRegisterButton}
+              onPress={() => navigation?.navigate('Register')}
+            >
+              <Text style={styles.navRegisterText}>{t('landing.startFree')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -78,7 +88,7 @@ export default function LandingScreen({ navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.ctaSecondary}
-            onPress={() => navigation?.navigate('Login')}
+            onPress={() => browseAsGuest()}
           >
             <Text style={styles.ctaSecondaryText}>{t('landing.ctaSecondary')}</Text>
           </TouchableOpacity>
@@ -126,7 +136,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'web' ? 20 : 56,
     paddingBottom: 16,
   },
   logoContainer: {
@@ -211,10 +220,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   headingLine1: {
-    fontSize: Platform.OS === 'web' ? 72 : 56,
+    fontSize: headingFontSize,
     fontWeight: '900',
     color: '#1A1A2E',
-    lineHeight: Platform.OS === 'web' ? 80 : 64,
+    lineHeight: headingLineHeight,
     letterSpacing: -1,
     textAlign: 'center',
   },
@@ -223,10 +232,10 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   headingLine2: {
-    fontSize: Platform.OS === 'web' ? 72 : 56,
+    fontSize: headingFontSize,
     fontWeight: '900',
     color: '#1A1A2E',
-    lineHeight: Platform.OS === 'web' ? 80 : 64,
+    lineHeight: headingLineHeight,
     letterSpacing: -1,
     textAlign: 'center',
   },

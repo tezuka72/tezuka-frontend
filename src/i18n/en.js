@@ -30,7 +30,7 @@ export default {
   // Register Screen
   'register.title': 'Create Account',
   'register.subtitle': 'Sign up for free',
-  'register.usernamePlaceholder': 'Username',
+  'register.usernamePlaceholder': 'Account ID',
   'register.displayNamePlaceholder': 'Display Name',
   'register.emailPlaceholder': 'Email',
   'register.passwordPlaceholder': 'Password',
@@ -144,6 +144,34 @@ export default {
   'inbox.title': 'Inbox',
   'inbox.empty': 'No messages',
   'inbox.emptyHint': 'Messages from other users will appear here',
+  'inbox.newDM': 'New Message',
+  'inbox.dm': 'DM',
+  'inbox.group': 'Group',
+  'inbox.noMessages': 'No messages yet',
+  'inbox.loadError': 'Failed to load messages',
+
+  // Chat Screen
+  'chat.placeholder': 'Type a message...',
+  'chat.send': 'Send',
+  'chat.replyingTo': 'Replying to:',
+  'chat.cancelReply': 'Cancel',
+  'chat.deleteMessage': 'Delete message',
+  'chat.react': 'React',
+  'chat.reply': 'Reply',
+  'chat.loadError': 'Failed to load messages',
+  'chat.sendError': 'Failed to send message',
+  'chat.deleteError': 'Failed to delete message',
+  'chat.you': 'You',
+
+  // New Conversation Screen
+  'newConv.title': 'New Message',
+  'newConv.searchPlaceholder': 'Search users...',
+  'newConv.groupName': 'Group name (optional)',
+  'newConv.create': 'Create',
+  'newConv.maxMembers': 'Up to 10 members',
+  'newConv.selectUser': 'Select a user to message',
+  'newConv.loadError': 'Failed to load users',
+  'newConv.createError': 'Failed to create conversation',
 
   // Profile favorites
   'profile.favorites': 'Favorites',
@@ -152,6 +180,49 @@ export default {
 
   // App loading
   'app.loading': 'Loading...',
+
+  // Bank Account Screen
+  'bank.title': 'Bank Account',
+  'bank.note': 'Payouts will be sent to this account. Please enter your information accurately.',
+  'bank.bankName': 'Bank Name',
+  'bank.bankNamePlaceholder': 'e.g. Bank of America',
+  'bank.branchName': 'Branch Name',
+  'bank.branchNamePlaceholder': 'e.g. Main Branch',
+  'bank.accountType': 'Account Type',
+  'bank.accountNumber': 'Account Number',
+  'bank.accountNumberPlaceholder': 'e.g. 1234567',
+  'bank.accountHolder': 'Account Holder Name',
+  'bank.accountHolderPlaceholder': 'e.g. YAMADA TARO',
+  'bank.accountHolderHint': '* Enter the name exactly as registered with your bank',
+  'bank.save': 'Save',
+  'bank.saveSuccess': 'Bank account saved',
+  'bank.saveError': 'Failed to save bank account',
+  'bank.errorBankName': 'Please enter bank name',
+  'bank.errorBranchName': 'Please enter branch name',
+  'bank.errorAccountNumber': 'Please enter account number',
+  'bank.errorAccountHolder': 'Please enter account holder name',
+
+  // Withdrawal Screen
+  'withdrawal.title': 'Withdraw Earnings',
+  'withdrawal.availableBalance': 'Available Balance',
+  'withdrawal.totalEarned': 'Total Earned',
+  'withdrawal.totalWithdrawn': 'Total Requested',
+  'withdrawal.bankAccount': 'Payout Account',
+  'withdrawal.edit': 'Edit',
+  'withdrawal.register': 'Register',
+  'withdrawal.registerBankAccount': 'Register a bank account',
+  'withdrawal.requestTitle': 'Request Withdrawal',
+  'withdrawal.minAmountNote': 'Minimum withdrawal: ¥1,000',
+  'withdrawal.submit': 'Submit Request',
+  'withdrawal.history': 'Withdrawal History',
+  'withdrawal.pendingNote': 'A withdrawal request is currently being processed. Please allow a few business days.',
+  'withdrawal.confirmTitle': 'Confirm Withdrawal',
+  'withdrawal.confirmMessage': 'Request withdrawal of ¥{{amount}}?',
+  'withdrawal.submitSuccess': 'Withdrawal request submitted. Transfer will be made within a few days.',
+  'withdrawal.submitError': 'Failed to submit request',
+  'withdrawal.errorMinAmount': 'Minimum withdrawal amount is ¥1,000',
+  'withdrawal.errorNoBankAccount': 'Please register a bank account first',
+  'withdrawal.errorInsufficientBalance': 'Insufficient balance',
 
   // My Library
   'library.title': 'Library',

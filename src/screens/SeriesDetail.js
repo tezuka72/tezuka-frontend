@@ -8,8 +8,9 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { seriesAPI, postAPI, footprintAPI, libraryAPI } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -21,39 +22,55 @@ import SupportModal from '../components/SupportModal';
 import ContributionReceipt from '../components/ContributionReceipt';
 import { shareSeries } from '../utils/share';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// エピソードカード
-function EpisodeCard({ post, onPress, onLike }) {
+// エピソードカード（横並びレイアウト）
+function EpisodeCard({ post, index, onPress, onLike }) {
   const image = post.images?.[0]?.image_url || post.images?.[0] || post.thumbnail;
+  const episodeNum = index + 1;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
-      {image && (
-        <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
-      )}
-      <View style={styles.content}>
-        <Text style={styles.title}>{post.title}</Text>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
+      {/* サムネイル */}
+      <View style={styles.cardThumb}>
+        {image ? (
+          <Image source={{ uri: image }} style={styles.thumbImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.thumbPlaceholder}>
+            <Ionicons name="image-outline" size={24} color={Colors.muted} />
+          </View>
+        )}
+        {/* 話数バッジ */}
+        <View style={styles.episodeBadge}>
+          <Text style={styles.episodeBadgeText}>#{episodeNum}</Text>
+        </View>
+      </View>
+
+      {/* 情報 */}
+      <View style={styles.cardInfo}>
+        <Text style={styles.cardTitle} numberOfLines={2}>{post.title}</Text>
         {post.description ? (
-          <Text style={styles.description} numberOfLines={2}>
-            {post.description}
-          </Text>
+          <Text style={styles.cardDesc} numberOfLines={1}>{post.description}</Text>
         ) : null}
-        <View style={styles.stats}>
-          <TouchableOpacity style={styles.statItem} onPress={onLike}>
-            <Text style={styles.statIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
+        <View style={styles.cardStats}>
+          <TouchableOpacity style={styles.statItem} onPress={onLike} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons
+              name={post.is_liked ? 'heart' : 'heart-outline'}
+              size={14}
+              color={post.is_liked ? '#FF3B5C' : Colors.muted}
+            />
             <Text style={styles.statText}>{post.like_count || 0}</Text>
           </TouchableOpacity>
           <View style={styles.statItem}>
-            <Text style={styles.statIcon}>💬</Text>
+            <Ionicons name="chatbubble-outline" size={13} color={Colors.muted} />
             <Text style={styles.statText}>{post.comment_count || 0}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statIcon}>👁️</Text>
+            <Ionicons name="eye-outline" size={13} color={Colors.muted} />
             <Text style={styles.statText}>{post.view_count || 0}</Text>
           </View>
         </View>
       </View>
+
+      <Ionicons name="chevron-forward" size={16} color={Colors.muted} style={styles.cardArrow} />
     </TouchableOpacity>
   );
 }
@@ -68,14 +85,12 @@ export default function SeriesDetail({ route, navigation }) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // 足跡・応援
   const [footprints, setFootprints] = useState({});
   const [isEarlySupporter, setIsEarlySupporter] = useState(false);
   const [followersAfter, setFollowersAfter] = useState(0);
   const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [receipt, setReceipt] = useState({ visible: false, type: null });
 
-  // My Library — フォロー / シリーズいいね
   const [isFollowing, setIsFollowing] = useState(false);
   const [isSeriesLiked, setIsSeriesLiked] = useState(false);
 
@@ -122,6 +137,7 @@ export default function SeriesDetail({ route, navigation }) {
       setSeries(response.series);
       setPosts(response.episodes || []);
       setIsFollowing(response.series.is_following ?? false);
+      setIsSeriesLiked(response.series.is_series_liked ?? false);
     } catch (e) {
       console.error('Load series error:', e);
       setError(t('seriesDetail.loadError'));
@@ -142,7 +158,7 @@ export default function SeriesDetail({ route, navigation }) {
       setIsEarlySupporter(res.is_early_supporter ?? false);
       setFollowersAfter(res.followers_delta ?? 0);
     } catch (e) {
-      // 足跡取得失敗はサイレント
+      // サイレント
     }
   };
 
@@ -163,7 +179,6 @@ export default function SeriesDetail({ route, navigation }) {
         await postAPI.unlike(postId);
       } else {
         await postAPI.like(postId);
-        // いいね足跡を記録
         if (!footprints.liked) {
           const result = await footprintAPI.record(seriesId, 'liked');
           setFootprints(prev => ({ ...prev, liked: true }));
@@ -174,26 +189,19 @@ export default function SeriesDetail({ route, navigation }) {
       loadSeriesData();
     } catch (e) {
       console.error('Like error:', e);
-      setError(t('seriesDetail.likeError'));
     }
   };
 
   const handleShare = async () => {
     try {
-      await shareSeries(
-        seriesId,
-        null,
-        series?.title || '',
-        async () => {
-          // 共有足跡を記録
-          if (!footprints.shared) {
-            const result = await footprintAPI.record(seriesId, 'shared');
-            setFootprints(prev => ({ ...prev, shared: true }));
-            if (result?.is_early_supporter) setIsEarlySupporter(true);
-          }
-          setReceipt({ visible: true, type: 'shared' });
+      await shareSeries(seriesId, null, series?.title || '', async () => {
+        if (!footprints.shared) {
+          const result = await footprintAPI.record(seriesId, 'shared');
+          setFootprints(prev => ({ ...prev, shared: true }));
+          if (result?.is_early_supporter) setIsEarlySupporter(true);
         }
-      );
+        setReceipt({ visible: true, type: 'shared' });
+      });
     } catch (e) {
       console.error('Share error:', e);
     }
@@ -201,7 +209,6 @@ export default function SeriesDetail({ route, navigation }) {
 
   const handleSupportClose = async () => {
     setSupportModalVisible(false);
-    // 応援後に足跡を更新
     if (!footprints.supported) {
       const result = await footprintAPI.record(seriesId, 'supported').catch(() => null);
       setFootprints(prev => ({ ...prev, supported: true }));
@@ -218,126 +225,217 @@ export default function SeriesDetail({ route, navigation }) {
   }
 
   const heatLevel = series?.heat_level ?? 0;
+  const episodeCount = Array.isArray(posts) ? posts.length : 0;
+  const isOwner = user && series && user.id === series.user_id;
 
   return (
     <View style={styles.container}>
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <EpisodeCard
             post={item}
+            index={index}
             onPress={() => handlePostPress(item)}
             onLike={() => handleLike(item.id)}
           />
         )}
         ListHeaderComponent={() => (
           <>
-            {/* シリーズヘッダー */}
             {series && (
-              <View style={styles.header}>
-                {series.cover_image_url && (
-                  <Image
-                    source={{ uri: series.cover_image_url }}
-                    style={styles.coverImage}
-                    resizeMode="cover"
+              <>
+                {/* ===== カバーヒーロー ===== */}
+                <View style={styles.hero}>
+                  {series.cover_image_url ? (
+                    <Image
+                      source={{ uri: series.cover_image_url }}
+                      style={styles.heroImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.heroPlaceholder}>
+                      <Text style={styles.heroPlaceholderText}>📚</Text>
+                    </View>
+                  )}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.75)']}
+                    style={styles.heroGradient}
+                    pointerEvents="none"
                   />
-                )}
-                <View style={styles.headerContent}>
-                  {/* タイトル行 + 熱量リング */}
-                  <View style={styles.titleRow}>
-                    <Text style={styles.seriesTitle}>{series.title}</Text>
-                    <HeatRing heatLevel={heatLevel} size={52} />
+                  {/* 熱量リング（右上） */}
+                  <View style={styles.heroHeat}>
+                    <HeatRing heatLevel={heatLevel} size={48} />
                   </View>
+                </View>
 
-                  {series.description ? (
-                    <Text style={styles.seriesDescription}>
-                      {series.description}
+                {/* ===== ヘッダー情報 ===== */}
+                <View style={styles.headerContent}>
+
+                  {/* タイトル */}
+                  <Text style={styles.seriesTitle}>{series.title}</Text>
+
+                  {/* 作者情報 */}
+                  <TouchableOpacity
+                    style={styles.authorRow}
+                    activeOpacity={0.8}
+                    onPress={() => navigation?.navigate('UserProfile', {
+                      username: series.creator_username || series.username,
+                    })}
+                  >
+                    <View style={styles.authorAvatar}>
+                      <Text style={styles.authorAvatarText}>
+                        {(series.creator_name || series.creator_username)?.[0]?.toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                    <Text style={styles.authorName}>
+                      {series.creator_name || series.creator_username}
                     </Text>
+                    <Ionicons name="chevron-forward" size={14} color={Colors.muted} />
+                  </TouchableOpacity>
+
+                  {/* 説明文 */}
+                  {series.description ? (
+                    <Text style={styles.seriesDescription}>{series.description}</Text>
                   ) : null}
 
-                  {/* エピソード数・フォロー数・いいね数 */}
+                  {/* 統計 */}
                   <View style={styles.metaRow}>
-                    <Text style={styles.metaItem}>
-                      📚 {Array.isArray(posts) ? posts.length : 0}{t('seriesDetail.episodeSuffix')}
-                    </Text>
-                    {series.follower_count != null && (
-                      <Text style={styles.metaItem}>
-                        👥 {series.follower_count.toLocaleString()}
-                      </Text>
-                    )}
-                    {series.series_like_count != null && (
-                      <Text style={styles.metaItem}>
-                        ❤️ {series.series_like_count.toLocaleString()}
-                      </Text>
-                    )}
+                    <View style={styles.metaBadge}>
+                      <Ionicons name="book-outline" size={13} color={Colors.muted} />
+                      <Text style={styles.metaText}>{episodeCount}話</Text>
+                    </View>
+                    <View style={styles.metaBadge}>
+                      <Ionicons name="people-outline" size={13} color={Colors.muted} />
+                      <Text style={styles.metaText}>{(series.follower_count || 0).toLocaleString()}</Text>
+                    </View>
+                    <View style={styles.metaBadge}>
+                      <Ionicons name="heart-outline" size={13} color={Colors.muted} />
+                      <Text style={styles.metaText}>{(series.series_like_count || 0).toLocaleString()}</Text>
+                    </View>
+                    <View style={styles.metaBadge}>
+                      <Ionicons name="eye-outline" size={13} color={Colors.muted} />
+                      <Text style={styles.metaText}>{(series.total_views || 0).toLocaleString()}</Text>
+                    </View>
                   </View>
 
-                  {/* フォロー / いいね / 応援 / 共有 */}
+                  {/* ===== 第1話から読むCTA ===== */}
+                  {episodeCount > 0 && (
+                    <TouchableOpacity
+                      style={styles.startReadBtn}
+                      onPress={() => handlePostPress(posts[0])}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="play" size={16} color="#fff" />
+                      <Text style={styles.startReadBtnText}>第1話から読む</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* ===== アクションボタン行 ===== */}
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={[styles.followBtn, isFollowing && styles.followBtnActive]}
                       onPress={handleFollow}
                       activeOpacity={0.85}
                     >
+                      <Ionicons
+                        name={isFollowing ? 'checkmark' : 'add'}
+                        size={16}
+                        color={isFollowing ? Colors.violet : Colors.foreground}
+                      />
                       <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
-                        {isFollowing ? '✓ フォロー中' : '+ フォロー'}
+                        {isFollowing ? 'フォロー中' : 'フォロー'}
                       </Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
-                      style={styles.iconBtn}
+                      style={[styles.iconBtn, isSeriesLiked && styles.iconBtnActive]}
                       onPress={handleSeriesLike}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.iconBtnText}>
-                        {isSeriesLiked ? '❤️' : '🤍'}
-                      </Text>
+                      <Ionicons
+                        name={isSeriesLiked ? 'heart' : 'heart-outline'}
+                        size={20}
+                        color={isSeriesLiked ? '#FF3B5C' : Colors.foreground}
+                      />
                     </TouchableOpacity>
+
                     <TouchableOpacity
-                      style={styles.supportBtn}
+                      style={[styles.iconBtn, styles.supportBtn]}
                       onPress={() => setSupportModalVisible(true)}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.supportBtnText}>⚡ 応援</Text>
+                      <Text style={styles.supportBtnText}>⚡</Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
                       style={styles.iconBtn}
                       onPress={handleShare}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.iconBtnText}>🚀</Text>
+                      <Ionicons name="share-outline" size={20} color={Colors.foreground} />
                     </TouchableOpacity>
                   </View>
 
-                  {/* 初期ファン（作者のみ表示）*/}
-                  {user && series && user.id === series.user_id && (
-                    <TouchableOpacity
-                      style={styles.earlyFanBtn}
-                      onPress={() => navigation?.navigate('EarlyFans', {
-                        seriesId,
-                        seriesTitle: series.title,
-                      })}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.earlyFanBtnText}>✨ 初期ファン（非公開）</Text>
-                    </TouchableOpacity>
+                  {/* 掲示板ボタン */}
+                  <TouchableOpacity
+                    style={styles.boardBtn}
+                    onPress={() => navigation?.navigate('SeriesBoard', {
+                      seriesId,
+                      seriesTitle: series.title,
+                    })}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="chatbubbles-outline" size={16} color={Colors.muted} />
+                    <Text style={styles.boardBtnText}>コミュニティ掲示板</Text>
+                  </TouchableOpacity>
+
+                  {/* 作者専用ツール */}
+                  {isOwner && (
+                    <View style={styles.ownerRow}>
+                      <TouchableOpacity
+                        style={styles.ownerBtn}
+                        onPress={() => navigation?.navigate('Analytics', { seriesId, seriesTitle: series.title })}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="bar-chart-outline" size={14} color={Colors.violet} />
+                        <Text style={styles.ownerBtnText}>読者分析</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.ownerBtn}
+                        onPress={() => navigation?.navigate('EarlyFans', { seriesId, seriesTitle: series.title })}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="star-outline" size={14} color={Colors.violet} />
+                        <Text style={styles.ownerBtnText}>初期ファン</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
-              </View>
-            )}
 
-            {/* 足跡パネル（自分だけ表示） */}
-            <FootprintPanel
-              footprints={footprints}
-              isEarlySupporter={isEarlySupporter}
-              followersAfter={followersAfter}
-            />
+                {/* 足跡パネル */}
+                <FootprintPanel
+                  footprints={footprints}
+                  isEarlySupporter={isEarlySupporter}
+                  followersAfter={followersAfter}
+                />
+              </>
+            )}
 
             {error ? (
               <View style={styles.errorContainer}>
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
+
+            {/* エピソード一覧ヘッダー */}
+            {episodeCount > 0 && (
+              <View style={styles.sectionHeader}>
+                <Ionicons name="list" size={15} color={Colors.foreground} />
+                <Text style={styles.sectionHeaderText}>エピソード一覧</Text>
+                <Text style={styles.sectionHeaderCount}>{episodeCount}話</Text>
+              </View>
+            )}
           </>
         )}
         refreshControl={
@@ -350,19 +448,21 @@ export default function SeriesDetail({ route, navigation }) {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
+            <Ionicons name="book-outline" size={40} color={Colors.muted} />
             <Text style={styles.emptyText}>{t('seriesDetail.empty')}</Text>
+            {isOwner && (
+              <Text style={styles.emptyHint}>投稿画面からこのシリーズにエピソードを追加しましょう</Text>
+            )}
           </View>
         )}
       />
 
-      {/* 応援モーダル */}
       <SupportModal
         visible={supportModalVisible}
         onClose={handleSupportClose}
         seriesId={seriesId}
       />
 
-      {/* いいね/共有後の貢献レシート */}
       <ContributionReceipt
         visible={receipt.visible}
         type={receipt.type}
@@ -383,61 +483,152 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.background,
   },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 14,
-    flexWrap: 'wrap',
+
+  // ---- カバーヒーロー ----
+  hero: {
+    width: '100%',
+    height: 240,
+    backgroundColor: Colors.card,
   },
-  metaItem: {
-    fontSize: 14,
-    color: Colors.muted,
-    fontWeight: '500',
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
-  header: {
+  heroPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.border,
+  },
+  heroPlaceholderText: {
+    fontSize: 56,
+  },
+  heroGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+  },
+  heroHeat: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+  },
+
+  // ---- ヘッダー情報 ----
+  headerContent: {
+    padding: 16,
     backgroundColor: Colors.card,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  coverImage: {
-    width: '100%',
-    height: 150,
-  },
-  headerContent: {
-    padding: 16,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 8,
   },
   seriesTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     color: Colors.foreground,
-    flex: 1,
-    marginRight: 12,
+    marginBottom: 10,
+    lineHeight: 28,
   },
+
+  // ---- 作者情報 ----
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignSelf: 'flex-start',
+    gap: 8,
+  },
+  authorAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authorAvatarText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  authorName: {
+    fontSize: 13,
+    color: Colors.foreground,
+    fontWeight: '600',
+  },
+
   seriesDescription: {
     fontSize: 14,
     color: Colors.muted,
-    marginBottom: 12,
+    marginBottom: 14,
     lineHeight: 20,
   },
+
+  // ---- 統計バッジ ----
+  metaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: Colors.background,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  metaText: {
+    fontSize: 12,
+    color: Colors.muted,
+    fontWeight: '600',
+  },
+
+  // ---- 第1話から読むCTA ----
+  startReadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginBottom: 14,
+  },
+  startReadBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // ---- アクションボタン行 ----
   actionRow: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    marginBottom: 10,
   },
   followBtn: {
-    flex: 2,
-    backgroundColor: Colors.background,
-    borderRadius: 14,
-    paddingVertical: 11,
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    paddingVertical: 10,
     borderWidth: 1.5,
     borderColor: Colors.border,
   },
@@ -447,103 +638,180 @@ const styles = StyleSheet.create({
   },
   followBtnText: {
     color: Colors.foreground,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   followBtnTextActive: {
     color: Colors.violet,
   },
   iconBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnText: {
-    fontSize: 20,
+  iconBtnActive: {
+    borderColor: '#FF3B5C',
+    backgroundColor: 'rgba(255,59,92,0.08)',
   },
   supportBtn: {
-    flex: 2,
     backgroundColor: Colors.primary,
-    borderRadius: 14,
-    paddingVertical: 11,
-    alignItems: 'center',
+    borderColor: Colors.primary,
   },
   supportBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 18,
   },
-  earlyFanBtn: {
-    marginTop: 10,
+
+  // ---- 掲示板ボタン ----
+  boardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+    marginBottom: 8,
+  },
+  boardBtnText: {
+    color: Colors.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // ---- 作者専用 ----
+  ownerRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  ownerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     paddingVertical: 10,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(183,108,200,0.4)',
     backgroundColor: 'rgba(183,108,200,0.08)',
-    alignItems: 'center',
   },
-  earlyFanBtnText: {
+  ownerBtnText: {
     color: Colors.violet,
     fontSize: 13,
     fontWeight: '600',
   },
-  listContent: {
-    paddingBottom: 24,
+
+  // ---- セクションヘッダー ----
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.background,
   },
+  sectionHeaderText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.foreground,
+    flex: 1,
+  },
+  sectionHeaderCount: {
+    fontSize: 13,
+    color: Colors.muted,
+    fontWeight: '500',
+  },
+
+  // ---- エピソードカード ----
   card: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 12,
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
-    ...Shadows.medium,
+    ...Shadows.small,
   },
-  image: {
+  cardThumb: {
+    width: 88,
+    height: 88,
+    backgroundColor: Colors.border,
+    position: 'relative',
+  },
+  thumbImage: {
     width: '100%',
-    height: SCREEN_WIDTH * 0.5,
+    height: '100%',
   },
-  content: {
-    padding: 12,
+  thumbPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.border,
   },
-  title: {
-    fontSize: 16,
+  episodeBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  episodeBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cardInfo: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  cardTitle: {
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.foreground,
-    marginBottom: 6,
+    marginBottom: 4,
+    lineHeight: 19,
   },
-  description: {
-    fontSize: 12,
+  cardDesc: {
+    fontSize: 11,
     color: Colors.muted,
-    marginBottom: 10,
-    lineHeight: 18,
+    marginBottom: 8,
   },
-  stats: {
+  cardStats: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: 10,
+    gap: 12,
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
-  },
-  statIcon: {
-    fontSize: 14,
-    marginRight: 4,
+    gap: 3,
   },
   statText: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.muted,
     fontWeight: '600',
   },
+  cardArrow: {
+    paddingRight: 12,
+  },
+
+  listContent: {
+    paddingBottom: 32,
+  },
+
   errorContainer: {
     backgroundColor: '#FFE0E0',
     paddingHorizontal: 16,
@@ -560,14 +828,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 48,
+    gap: 12,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.muted,
     fontWeight: '500',
+  },
+  emptyHint: {
+    fontSize: 13,
+    color: Colors.muted,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    lineHeight: 18,
   },
 });

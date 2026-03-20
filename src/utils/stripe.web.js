@@ -1,9 +1,12 @@
-// Web: Stripe はネイティブ専用のためスタブを提供
+// Web: @stripe/stripe-react-native は web 非対応のためスタブを提供
+export function StripeProvider({ children }) {
+  return children;
+}
 
-export const StripeProvider = ({ children }) => <>{children}</>;
-
-export const useStripe = () => ({
-  confirmPayment: async () => ({
-    error: { message: 'お支払いはアプリ版のみ対応しています。' },
-  }),
-});
+export function useStripe() {
+  return {
+    confirmPayment: async () => ({ error: { message: 'Stripe is not supported on web' } }),
+    initPaymentSheet: async () => ({ error: { message: 'Stripe is not supported on web' } }),
+    presentPaymentSheet: async () => ({ error: { message: 'Stripe is not supported on web' } }),
+  };
+}

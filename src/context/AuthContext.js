@@ -1,6 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authAPI } from '../api/client';
+import { authAPI, wakeupServer } from '../api/client';
 
 const AuthContext = createContext();
 
@@ -16,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authToken, setAuthToken] = useState(null);
+  const [isGuest, setIsGuest] = useState(false);
 
   // アプリ起動時にトークンをチェック
   useEffect(() => {
@@ -23,6 +24,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkAuth = async () => {
+    wakeupServer();
     try {
       const token = await AsyncStorage.getItem('authToken');
       const userData = await AsyncStorage.getItem('user');
@@ -40,7 +42,10 @@ export const AuthProvider = ({ children }) => {
             await logout();
           }
         } catch (error) {
-          await logout();
+          // 401/403 のみログアウト。ネットワークエラー時はキャッシュデータを維持
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            await logout();
+          }
         }
       }
     } catch (error) {
@@ -50,16 +55,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const browseAsGuest = () => {
+    setIsGuest(true);
+  };
+
   const login = async (email, password) => {
     try {
       const response = await authAPI.login(email, password);
-      
+
       await AsyncStorage.setItem('authToken', response.token);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      
+
       setAuthToken(response.token);
       setUser(response.user);
-      
+      setIsGuest(false);
+
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
@@ -79,7 +89,8 @@ export const AuthProvider = ({ children }) => {
       
       setAuthToken(response.token);
       setUser(response.user);
-      
+      setIsGuest(false);
+
       return { success: true };
     } catch (error) {
       console.error('Register error:', error);
@@ -95,9 +106,10 @@ export const AuthProvider = ({ children }) => {
     try {
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('user');
-      
+
       setAuthToken(null);
       setUser(null);
+      setIsGuest(false);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -112,10 +124,12 @@ export const AuthProvider = ({ children }) => {
     user,
     authToken,
     isLoading,
+    isGuest,
     login,
     register,
     logout,
     updateUser,
+    browseAsGuest,
     isAuthenticated: !!user,
   };
 

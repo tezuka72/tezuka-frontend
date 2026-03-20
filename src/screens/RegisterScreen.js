@@ -9,7 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const LOGO = require('../../assets/logo.png');
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +21,7 @@ import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
 
 export default function RegisterScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { register } = useAuth();
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
@@ -26,6 +30,7 @@ export default function RegisterScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const validatePassword = (pwd) => {
     const hasMinLength = pwd.length >= 8;
@@ -49,16 +54,24 @@ export default function RegisterScreen({ navigation }) {
 
     try {
       setError('');
+      setIsLoading(true);
       const result = await register(username, email, password, displayName);
       if (!result.success) {
         setError(result.error || t('register.error'));
       }
     } catch (err) {
       setError(err.message || t('register.error'));
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
+    <LinearGradient
+      colors={['#FFD60A', '#FFFFFF', '#29B6F6']}
+      locations={[0, 0.45, 1]}
+      style={[styles.gradient, { paddingTop: insets.top }]}
+    >
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -66,7 +79,7 @@ export default function RegisterScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.logoContainer}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.logoText}>TEZUKA</Text>
+          <Text style={styles.logoText}>LORE MANGA</Text>
         </View>
 
         <Text style={styles.title}>{t('register.title')}</Text>
@@ -119,12 +132,16 @@ export default function RegisterScreen({ navigation }) {
               secureTextEntry
             />
           </View>
-          {passwordError ? <Text style={styles.passwordHint}>{passwordError}</Text> : null}
+          <Text style={[styles.passwordHint, passwordError ? { color: '#C92A2A' } : { color: '#888' }]}>
+            {passwordError || 'パスワードは8文字以上、大文字・小文字・数字を含めてください'}
+          </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TouchableOpacity style={styles.button} onPress={handleRegister}>
-            <Text style={styles.buttonText}>{t('register.button')}</Text>
+          <TouchableOpacity style={[styles.button, isLoading && { opacity: 0.7 }]} onPress={handleRegister} disabled={isLoading}>
+            {isLoading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.buttonText}>{t('register.button')}</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -138,13 +155,16 @@ export default function RegisterScreen({ navigation }) {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     flexGrow: 1,
@@ -163,18 +183,18 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: Colors.foreground,
+    color: '#1A1A2E',
     letterSpacing: 2,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: Colors.foreground,
+    color: '#1A1A2E',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: Colors.muted,
+    color: '#555566',
     marginBottom: 32,
   },
   form: {
@@ -184,14 +204,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   input: {
-    backgroundColor: Colors.card,
+    backgroundColor: 'rgba(255,255,255,0.7)',
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 16,
     fontSize: 16,
-    color: Colors.foreground,
+    color: '#1A1A2E',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(37,99,235,0.2)',
   },
   error: {
     color: Colors.error,
@@ -222,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: Colors.muted,
+    color: '#555566',
     fontSize: 14,
   },
   linkHighlight: {

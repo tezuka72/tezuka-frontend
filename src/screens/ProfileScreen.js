@@ -210,9 +210,13 @@ export default function ProfileScreen({ route, navigation }) {
   const [bookmarksLoaded, setBookmarksLoaded] = useState(false);
 
   const isOwnProfile = currentUser?.username === username;
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [userPosts, setUserPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   useEffect(() => {
     loadProfile();
+    loadUserPosts();
   }, [username]);
 
   const loadProfile = async () => {
@@ -220,9 +224,39 @@ export default function ProfileScreen({ route, navigation }) {
       setError('');
       const response = await userAPI.getProfile(username);
       setProfile(response.user);
+      setIsFollowing(response.user?.is_following ?? false);
     } catch (e) {
       console.error('Load profile error:', e);
       setError(t('profile.loadError'));
+    }
+  };
+
+  const loadUserPosts = async () => {
+    setPostsLoading(true);
+    try {
+      const response = await userAPI.getUserPosts(username);
+      setUserPosts(response.posts || []);
+    } catch (e) {
+      console.error('Load user posts error:', e);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!profile) return;
+    try {
+      if (isFollowing) {
+        await userAPI.unfollow(profile.id);
+        setIsFollowing(false);
+        setProfile(prev => ({ ...prev, follower_count: Math.max(0, (prev.follower_count || 1) - 1) }));
+      } else {
+        await userAPI.follow(profile.id);
+        setIsFollowing(true);
+        setProfile(prev => ({ ...prev, follower_count: (prev.follower_count || 0) + 1 }));
+      }
+    } catch (e) {
+      console.error('Follow error:', e);
     }
   };
 
@@ -249,10 +283,7 @@ export default function ProfileScreen({ route, navigation }) {
   const handleDeletePost = async (postId) => {
     try {
       await postAPI.delete(postId);
-      setProfile(prev => ({
-        ...prev,
-        posts: prev.posts.filter(p => p.id !== postId),
-      }));
+      setUserPosts(prev => prev.filter(p => p.id !== postId));
     } catch (e) {
       console.error('Delete post error:', e);
       Alert.alert('エラー', '削除に失敗しました。もう一度お試しください。');
@@ -306,14 +337,43 @@ export default function ProfileScreen({ route, navigation }) {
         </View>
 
         {!isOwnProfile && (
-          <TouchableOpacity style={styles.followButton}>
-            <Text style={styles.followButtonText}>{t('profile.follow')}</Text>
+          <TouchableOpacity
+            style={[styles.followButton, isFollowing && styles.followButtonActive]}
+            onPress={handleFollow}
+          >
+            <Text style={[styles.followButtonText, isFollowing && styles.followButtonTextActive]}>
+              {isFollowing ? `✓ ${t('profile.following')}` : t('profile.follow')}
+            </Text>
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.langToggleButton} onPress={toggleLanguage}>
-          <Text style={styles.langToggleText}>🌐 {lang === 'ja' ? 'EN' : 'JP'}</Text>
-        </TouchableOpacity>
+        <View style={styles.profileActions}>
+          <TouchableOpacity style={styles.langToggleButton} onPress={toggleLanguage}>
+            <Text style={styles.langToggleText}>🌐 {lang === 'ja' ? 'EN' : 'JP'}</Text>
+          </TouchableOpacity>
+          {isOwnProfile && (
+            <>
+              <TouchableOpacity
+                style={styles.earningsButton}
+                onPress={() => navigation?.navigate('EarningsDashboard')}
+              >
+                <Text style={styles.earningsButtonText}>💰 収益</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() => navigation?.navigate('EditProfile')}
+              >
+                <Text style={styles.editProfileButtonText}>✏️ 編集</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.createSeriesButton}
+                onPress={() => navigation?.navigate('CreateSeries')}
+              >
+                <Text style={styles.createSeriesButtonText}>＋ シリーズ</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </View>
 
       {/* タブバー */}
@@ -353,14 +413,16 @@ export default function ProfileScreen({ route, navigation }) {
       {/* コンテンツ */}
       {activeTab === 'posts' && (
         <ScrollView contentContainerStyle={styles.gridContainer}>
-          {(profile.posts || []).length === 0 ? (
+          {postsLoading ? (
+            <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
+          ) : userPosts.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📖</Text>
               <Text style={styles.emptyText}>{t('profile.posts')}</Text>
             </View>
           ) : (
             <View style={styles.grid}>
-              {(profile.posts || []).map((post) => (
+              {userPosts.map((post) => (
                 <MiniPostCard
                   key={post.id}
                   post={post}
@@ -484,13 +546,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     ...Shadows.glow,
   },
+  followButtonActive: {
+    backgroundColor: Colors.background,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
   followButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: 'bold',
   },
-  langToggleButton: {
+  followButtonTextActive: {
+    color: Colors.primary,
+  },
+  profileActions: {
+    flexDirection: 'row',
+    gap: 8,
     marginTop: 8,
+    alignItems: 'center',
+  },
+  langToggleButton: {
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
@@ -501,6 +576,41 @@ const styles = StyleSheet.create({
     color: Colors.muted,
     fontSize: 12,
     fontWeight: '600',
+  },
+  earningsButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+  },
+  earningsButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  editProfileButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editProfileButtonText: {
+    color: Colors.foreground,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  createSeriesButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  createSeriesButtonText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   // メインタブ
   tabBar: {

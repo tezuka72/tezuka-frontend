@@ -8,16 +8,20 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Linking,
 } from 'react-native';
-import { postAPI, footprintAPI } from '../api/client';
+import { postAPI, footprintAPI, affiliateAPI, tipsAPI, bookmarkAPI } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
+import { Ionicons } from '@expo/vector-icons';
 import SupportModal from '../components/SupportModal';
+import GiftModal from '../components/GiftModal';
+import { shareSeries } from '../utils/share';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function PostDetailScreen({ route }) {
+export default function PostDetailScreen({ route, navigation }) {
   const { postId } = route.params;
   const { t } = useLanguage();
   const [post, setPost] = useState(null);
@@ -25,35 +29,72 @@ export default function PostDetailScreen({ route }) {
   const [commentText, setCommentText] = useState('');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const scrollToImage = (index) => {
+    if (!post?.images) return;
+    const clamped = Math.max(0, Math.min(index, post.images.length - 1));
+    setCurrentImageIndex(clamped);
+  };
   const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [giftModalVisible, setGiftModalVisible] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [topTippers, setTopTippers] = useState([]);
+  const [replyingTo, setReplyingTo] = useState(null); // { id, username }
+  const [expandedReplies, setExpandedReplies] = useState({}); // { commentId: [replies] }
+  const [commentLikes, setCommentLikes] = useState({}); // { commentId: { liked, count } }
 
   useEffect(() => {
     loadPost();
     loadComments();
+    loadProducts();
+    loadTopTippers();
   }, [postId]);
 
   const loadPost = async () => {
     try {
       setError('');
-      setIsLoading(true);
       const response = await postAPI.getPost(postId);
       setPost(response.post);
     } catch (e) {
       console.error('Load post error:', e);
       setError(t('postDetail.loadError'));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const loadComments = async () => {
     try {
       const response = await postAPI.getComments(postId);
-      setComments(response.comments || []);
+      const loaded = response.comments || [];
+      setComments(loaded);
+      // いいね状態を初期化
+      const likes = {};
+      loaded.forEach(c => {
+        likes[c.id] = { liked: c.is_liked || false, count: parseInt(c.like_count) || 0 };
+      });
+      setCommentLikes(likes);
     } catch (e) {
       console.error('Load comments error:', e);
       setError(t('postDetail.commentLoadError'));
+    }
+  };
+
+  const handleCommentLike = async (commentId) => {
+    const current = commentLikes[commentId] || { liked: false, count: 0 };
+    // 楽観的更新
+    setCommentLikes(prev => ({
+      ...prev,
+      [commentId]: { liked: !current.liked, count: current.liked ? current.count - 1 : current.count + 1 },
+    }));
+    try {
+      if (current.liked) {
+        await postAPI.unlikeComment(postId, commentId);
+      } else {
+        await postAPI.likeComment(postId, commentId);
+      }
+    } catch {
+      // 失敗時は元に戻す
+      setCommentLikes(prev => ({ ...prev, [commentId]: current }));
     }
   };
 
@@ -73,6 +114,20 @@ export default function PostDetailScreen({ route }) {
     }
   };
 
+  const handleBookmark = async () => {
+    try {
+      if (isBookmarked) {
+        await bookmarkAPI.remove(postId);
+        setIsBookmarked(false);
+      } else {
+        await bookmarkAPI.add(postId);
+        setIsBookmarked(true);
+      }
+    } catch (e) {
+      console.error('Bookmark error:', e);
+    }
+  };
+
   // スクロール末尾で読了足跡を記録
   const handleScrollEnd = () => {
     if (post?.series_id) {
@@ -83,115 +138,372 @@ export default function PostDetailScreen({ route }) {
   const handleComment = async () => {
     if (!commentText.trim()) return;
     try {
-      await postAPI.addComment(postId, commentText);
+      await postAPI.addComment(postId, commentText, replyingTo?.id || null);
       setCommentText('');
-      loadComments();
+      setReplyingTo(null);
+      if (replyingTo?.id) {
+        loadReplies(replyingTo.id);
+      } else {
+        loadComments();
+      }
     } catch (e) {
       console.error('Comment error:', e);
       setError(t('postDetail.commentPostError'));
     }
   };
 
+  const loadReplies = async (commentId) => {
+    try {
+      const response = await postAPI.getReplies(postId, commentId);
+      setExpandedReplies(prev => ({ ...prev, [commentId]: response.replies || [] }));
+    } catch (e) {
+      console.error('Load replies error:', e);
+    }
+  };
+
+  const toggleReplies = (commentId) => {
+    if (expandedReplies[commentId]) {
+      setExpandedReplies(prev => { const n = { ...prev }; delete n[commentId]; return n; });
+    } else {
+      loadReplies(commentId);
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const response = await affiliateAPI.getPostProducts(postId);
+      setProducts(response.products || []);
+    } catch (e) {
+      console.error('Load products error:', e);
+    }
+  };
+
+  const loadTopTippers = async () => {
+    try {
+      const response = await tipsAPI.getTopTippers(postId);
+      setTopTippers(response.tippers || response.top_tippers || []);
+    } catch (e) {
+      console.error('Load top tippers error:', e);
+    }
+  };
+
+  const handleProductClick = async (productId, platform) => {
+    try {
+      const response = await affiliateAPI.recordClick(productId, platform);
+      if (response.redirect_url) {
+        Linking.openURL(response.redirect_url);
+      }
+    } catch (e) {
+      console.error('Product click error:', e);
+    }
+  };
+
   if (!post) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loading}>{t('common.loading')}</Text>
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <Text style={styles.loading}>{t('common.loading')}</Text>
+        )}
       </View>
     );
   }
 
+  const renderComment = (comment) => (
+    <View key={comment.id} style={styles.comment}>
+      <Text style={styles.commentUser}>
+        {comment.display_name || comment.username}
+      </Text>
+      <Text style={styles.commentText}>{comment.content}</Text>
+      <View style={styles.commentActions}>
+        <TouchableOpacity
+          style={styles.replyBtn}
+          onPress={() => setReplyingTo({ id: comment.id, username: comment.username })}
+        >
+          <Text style={styles.replyBtnText}>返信</Text>
+        </TouchableOpacity>
+        {parseInt(comment.reply_count) > 0 && (
+          <TouchableOpacity
+            style={styles.replyBtn}
+            onPress={() => toggleReplies(comment.id)}
+          >
+            <Text style={styles.replyBtnText}>
+              {expandedReplies[comment.id]
+                ? '返信を閉じる'
+                : `返信 ${comment.reply_count}件`}
+            </Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={styles.commentLikeBtn}
+          onPress={() => handleCommentLike(comment.id)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={commentLikes[comment.id]?.liked ? 'heart' : 'heart-outline'}
+            size={14}
+            color={commentLikes[comment.id]?.liked ? '#FF3B5C' : Colors.muted}
+          />
+          {(commentLikes[comment.id]?.count || 0) > 0 && (
+            <Text style={[styles.replyBtnText, commentLikes[comment.id]?.liked && { color: '#FF3B5C' }]}>
+              {commentLikes[comment.id].count}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+      {expandedReplies[comment.id]?.map(reply => (
+        <View key={reply.id} style={styles.replyItem}>
+          <Text style={styles.commentUser}>
+            @{reply.username} {reply.display_name}
+          </Text>
+          <Text style={styles.commentText}>{reply.content}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
 
-      <ScrollView onScrollEndDrag={handleScrollEnd} scrollEventThrottle={400}>
-        {post.images && post.images.length > 0 && (
-          <View style={styles.imageContainer}>
-            <Image
-              source={{ uri: post.images[currentImageIndex]?.image_url || post.images[currentImageIndex] }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-            {post.images.length > 1 && (
-              <View style={styles.imageCounter}>
-                <Text style={styles.imageCounterText}>
-                  {currentImageIndex + 1} / {post.images.length}
+      {/* 上部：漫画エリア（独立スクロール） */}
+      <View style={styles.mangaArea}>
+        <ScrollView onScrollEndDrag={handleScrollEnd} scrollEventThrottle={400}>
+          {post.images && post.images.length > 0 && (
+            post.type === 'vertical_scroll' ? (
+              <View>
+                {post.images.map((img, i) => (
+                  <Image
+                    key={i}
+                    source={{ uri: img?.image_url || img }}
+                    style={styles.verticalImage}
+                    resizeMode="contain"
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: post.images[currentImageIndex]?.image_url || post.images[currentImageIndex] }}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
+                <View style={styles.tapOverlay}>
+                  <TouchableOpacity
+                    style={styles.tapZoneLeft}
+                    activeOpacity={1}
+                    onPress={() => scrollToImage(currentImageIndex - 1)}
+                  />
+                  <TouchableOpacity
+                    style={styles.tapZoneRight}
+                    activeOpacity={1}
+                    onPress={() => scrollToImage(currentImageIndex + 1)}
+                  />
+                </View>
+                {post.images.length > 1 && (
+                  <View style={styles.imageCounter}>
+                    <Text style={styles.imageCounterText}>
+                      {currentImageIndex + 1} / {post.images.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )
+          )}
+
+          <View style={styles.content}>
+            <TouchableOpacity
+              style={styles.header}
+              onPress={() => navigation?.navigate('UserProfile', { username: post.creator_username })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {post.creator_name?.[0]?.toUpperCase() || '?'}
                 </Text>
+              </View>
+              <View>
+                <Text style={styles.displayName}>{post.creator_name}</Text>
+                <Text style={styles.username}>@{post.creator_username}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <Text style={styles.title}>{post.title}</Text>
+            {post.description && (
+              <>
+                <Text style={styles.description} numberOfLines={descExpanded ? undefined : 3}>
+                  {post.description}
+                </Text>
+                {post.description.length > 60 && (
+                  <TouchableOpacity onPress={() => setDescExpanded(!descExpanded)}>
+                    <Text style={styles.expandButton}>
+                      {descExpanded ? '閉じる' : '続きを読む'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+            {post.series_id && (
+              <TouchableOpacity
+                style={styles.seriesButton}
+                onPress={() => navigation?.navigate('SeriesDetail', { seriesId: post.series_id })}
+              >
+                <Text style={styles.seriesButtonText}>📚 シリーズを見る</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+                <Text style={styles.actionIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
+                <Text style={styles.actionText}>{post.like_count || 0}</Text>
+              </TouchableOpacity>
+              <View style={styles.actionButton}>
+                <Text style={styles.actionIcon}>💬</Text>
+                <Text style={styles.actionText}>{post.comment_count || 0}</Text>
+              </View>
+              <View style={styles.actionButton}>
+                <Text style={styles.actionIcon}>👁️</Text>
+                <Text style={styles.actionText}>{post.view_count || 0}</Text>
+              </View>
+              <TouchableOpacity style={styles.actionButton} onPress={handleBookmark}>
+                <Ionicons
+                  name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                  size={22}
+                  color={isBookmarked ? Colors.primary : Colors.muted}
+                />
+              </TouchableOpacity>
+              {post.series_id && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => shareSeries(post.series_id, post.id, post.title).catch(() => {})}
+                >
+                  <Ionicons name="share-outline" size={22} color={Colors.muted} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.supportButton}
+                onPress={() => setGiftModalVisible(true)}
+              >
+                <Text style={styles.supportButtonText}>🎁 ギフト・応援</Text>
+              </TouchableOpacity>
+            </View>
+
+            {products.length > 0 && (
+              <View style={styles.productsSection}>
+                <Text style={styles.sectionTitle}>関連商品</Text>
+                {products.map((product) => (
+                  <View key={product.id} style={styles.productCard}>
+                    {product.image_url ? (
+                      <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.productImage, styles.productImagePlaceholder]}>
+                        <Text style={styles.productImagePlaceholderText}>🛍️</Text>
+                      </View>
+                    )}
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName} numberOfLines={2}>{product.product_name}</Text>
+                      {product.price && (
+                        <Text style={styles.productPrice}>¥{product.price.toLocaleString()}</Text>
+                      )}
+                      <View style={styles.productLinks}>
+                        {product.product_url_amazon && (
+                          <TouchableOpacity
+                            style={[styles.platformButton, styles.amazonButton]}
+                            onPress={() => handleProductClick(product.id, 'amazon')}
+                          >
+                            <Text style={styles.platformButtonText}>Amazon</Text>
+                          </TouchableOpacity>
+                        )}
+                        {product.product_url_rakuten && (
+                          <TouchableOpacity
+                            style={[styles.platformButton, styles.rakutenButton]}
+                            onPress={() => handleProductClick(product.id, 'rakuten')}
+                          >
+                            <Text style={styles.platformButtonText}>楽天</Text>
+                          </TouchableOpacity>
+                        )}
+                        {product.product_url_yahoo && (
+                          <TouchableOpacity
+                            style={[styles.platformButton, styles.yahooButton]}
+                            onPress={() => handleProductClick(product.id, 'yahoo')}
+                          >
+                            <Text style={styles.platformButtonText}>Yahoo!</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {topTippers.length > 0 && (
+              <View style={styles.tippersSection}>
+                <Text style={styles.sectionTitle}>⚡ 応援してくれた人</Text>
+                <View style={styles.tippersRow}>
+                  {topTippers.map((tipper, i) => (
+                    <TouchableOpacity
+                      key={tipper.user_id || i}
+                      onPress={() => navigation?.navigate('UserProfile', { username: tipper.username })}
+                    >
+                      <Text style={styles.tipperName}>
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⚡'}
+                        {tipper.display_name || tipper.username}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {post.hashtags && post.hashtags.length > 0 && (
+              <View style={styles.hashtagRow}>
+                {post.hashtags.map(h => (
+                  <Text key={h.id} style={styles.hashtag}>#{h.tag}</Text>
+                ))}
               </View>
             )}
           </View>
-        )}
+        </ScrollView>
+      </View>
 
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {post.creator_name?.[0]?.toUpperCase() || '?'}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.displayName}>{post.creator_name}</Text>
-              <Text style={styles.username}>@{post.creator_username}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.title}>{post.title}</Text>
-          {post.description && (
-            <Text style={styles.description}>{post.description}</Text>
-          )}
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-              <Text style={styles.actionIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
-              <Text style={styles.actionText}>{post.like_count || 0}</Text>
-            </TouchableOpacity>
-            <View style={styles.actionButton}>
-              <Text style={styles.actionIcon}>💬</Text>
-              <Text style={styles.actionText}>{post.comment_count || 0}</Text>
-            </View>
-            <View style={styles.actionButton}>
-              <Text style={styles.actionIcon}>👁️</Text>
-              <Text style={styles.actionText}>{post.view_count || 0}</Text>
-            </View>
-
-            {/* 応援ボタン */}
-            <TouchableOpacity
-              style={styles.supportButton}
-              onPress={() => setSupportModalVisible(true)}
-            >
-              <Text style={styles.supportButtonText}>⚡ 応援</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.commentsSection}>
-            <Text style={styles.sectionTitle}>{t('postDetail.comments')}</Text>
-            {comments.map((comment) => (
-              <View key={comment.id} style={styles.comment}>
-                <Text style={styles.commentUser}>
-                  {comment.display_name || comment.username}
-                </Text>
-                <Text style={styles.commentText}>{comment.content}</Text>
-              </View>
-            ))}
-          </View>
+      {/* 下部：コメントパネル（独立スクロール） */}
+      <View style={styles.commentsPanel}>
+        <View style={styles.commentsPanelHandle}>
+          <View style={styles.handleBar} />
+          <Text style={styles.commentsPanelTitle}>
+            💬 {t('postDetail.comments')} {comments.length > 0 ? `(${comments.length})` : ''}
+          </Text>
         </View>
-      </ScrollView>
-
-      <View style={styles.commentInput}>
-        <TextInput
-          style={styles.input}
-          placeholder={t('postDetail.commentPlaceholder')}
-          placeholderTextColor={Colors.muted}
-          value={commentText}
-          onChangeText={setCommentText}
-        />
-        <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
-          <Text style={styles.sendButtonText}>{t('postDetail.send')}</Text>
-        </TouchableOpacity>
+        <ScrollView style={styles.commentsScroll} keyboardShouldPersistTaps="handled">
+          {comments.length === 0 ? (
+            <Text style={styles.noComments}>まだコメントはありません</Text>
+          ) : (
+            comments.map(renderComment)
+          )}
+        </ScrollView>
+        {replyingTo && (
+          <View style={styles.replyingBar}>
+            <Text style={styles.replyingText}>@{replyingTo.username} に返信中</Text>
+            <TouchableOpacity onPress={() => setReplyingTo(null)}>
+              <Ionicons name="close" size={16} color={Colors.muted} />
+            </TouchableOpacity>
+          </View>
+        )}
+        <View style={styles.commentInput}>
+          <TextInput
+            style={styles.input}
+            placeholder={replyingTo ? `@${replyingTo.username} への返信...` : t('postDetail.commentPlaceholder')}
+            placeholderTextColor={Colors.muted}
+            value={commentText}
+            onChangeText={setCommentText}
+          />
+          <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
+            <Text style={styles.sendButtonText}>{t('postDetail.send')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <SupportModal
@@ -199,6 +511,12 @@ export default function PostDetailScreen({ route }) {
         onClose={() => setSupportModalVisible(false)}
         seriesId={post.series_id}
         episodeId={post.id}
+      />
+      <GiftModal
+        visible={giftModalVisible}
+        onClose={() => setGiftModalVisible(false)}
+        receiverId={post.user_id}
+        postId={post.id}
       />
     </View>
   );
@@ -208,6 +526,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  mangaArea: {
+    flex: 1,
+  },
+  commentsPanel: {
+    height: SCREEN_HEIGHT * 0.38,
+    backgroundColor: Colors.card,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  commentsPanelHandle: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  handleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginBottom: 6,
+  },
+  commentsPanelTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.foreground,
+  },
+  commentsScroll: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  noComments: {
+    color: Colors.muted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 20,
   },
   loading: {
     color: Colors.foreground,
@@ -223,6 +579,24 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  verticalImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.4,
+  },
+  tapOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+  },
+  tapZoneLeft: {
+    flex: 1,
+  },
+  tapZoneRight: {
+    flex: 1,
   },
   imageCounter: {
     position: 'absolute',
@@ -316,6 +690,82 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  productsSection: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  productCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  productImage: {
+    width: 80,
+    height: 80,
+  },
+  productImagePlaceholder: {
+    backgroundColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productImagePlaceholderText: {
+    fontSize: 28,
+  },
+  productInfo: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  productName: {
+    color: Colors.foreground,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  productPrice: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  productLinks: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  platformButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  amazonButton: {
+    backgroundColor: '#FF9900',
+  },
+  rakutenButton: {
+    backgroundColor: '#BF0000',
+  },
+  yahooButton: {
+    backgroundColor: '#FF0033',
+  },
+  platformButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  hashtagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  hashtag: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   commentsSection: {
     marginTop: 16,
   },
@@ -342,6 +792,40 @@ const styles = StyleSheet.create({
     color: Colors.muted,
     fontSize: 14,
   },
+  commentActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 6,
+  },
+  replyBtn: { padding: 2 },
+  commentLikeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 'auto',
+    padding: 4,
+  },
+  replyBtnText: { color: Colors.primary, fontSize: 12, fontWeight: '600' },
+  replyItem: {
+    marginLeft: 16,
+    marginTop: 8,
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.border,
+  },
+  replyingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: Colors.card,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  replyingText: { color: Colors.muted, fontSize: 12 },
   commentInput: {
     flexDirection: 'row',
     padding: 12,
@@ -370,6 +854,50 @@ const styles = StyleSheet.create({
   sendButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  expandButton: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  seriesButton: {
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  seriesButtonText: {
+    color: Colors.foreground,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tippersSection: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  tippersRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tipperName: {
+    color: Colors.foreground,
+    fontSize: 13,
+    fontWeight: '600',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    overflow: 'hidden',
   },
   errorContainer: {
     backgroundColor: '#FFE0E0',

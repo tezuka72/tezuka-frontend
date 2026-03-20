@@ -30,7 +30,7 @@ export default {
   // Register Screen
   'register.title': '新規登録',
   'register.subtitle': 'アカウントを作成',
-  'register.usernamePlaceholder': 'ユーザー名',
+  'register.usernamePlaceholder': 'アカウントID',
   'register.displayNamePlaceholder': '表示名',
   'register.emailPlaceholder': 'メールアドレス',
   'register.passwordPlaceholder': 'パスワード',
@@ -144,6 +144,34 @@ export default {
   'inbox.title': '受信箱',
   'inbox.empty': 'メッセージはありません',
   'inbox.emptyHint': '他のユーザーからメッセージが届くと\nここに表示されます',
+  'inbox.newDM': '新規メッセージ',
+  'inbox.dm': 'DM',
+  'inbox.group': 'グループ',
+  'inbox.noMessages': 'まだメッセージがありません',
+  'inbox.loadError': 'メッセージの読み込みに失敗しました',
+
+  // Chat Screen
+  'chat.placeholder': 'メッセージを入力...',
+  'chat.send': '送信',
+  'chat.replyingTo': '返信先:',
+  'chat.cancelReply': 'キャンセル',
+  'chat.deleteMessage': 'メッセージを削除',
+  'chat.react': 'リアクション',
+  'chat.reply': '返信',
+  'chat.loadError': 'メッセージの読み込みに失敗しました',
+  'chat.sendError': '送信に失敗しました',
+  'chat.deleteError': '削除に失敗しました',
+  'chat.you': 'あなた',
+
+  // New Conversation Screen
+  'newConv.title': '新しいメッセージ',
+  'newConv.searchPlaceholder': 'ユーザーを検索...',
+  'newConv.groupName': 'グループ名（任意）',
+  'newConv.create': '作成',
+  'newConv.maxMembers': '最大10人まで選択できます',
+  'newConv.selectUser': 'メッセージを送るユーザーを選択',
+  'newConv.loadError': 'ユーザーの読み込みに失敗しました',
+  'newConv.createError': '会話の作成に失敗しました',
 
   // Profile favorites
   'profile.favorites': 'お気に入り',
@@ -152,6 +180,49 @@ export default {
 
   // App loading
   'app.loading': '読み込み中...',
+
+  // Bank Account Screen
+  'bank.title': '銀行口座の登録',
+  'bank.note': '登録した口座に振込を行います。口座情報は正確に入力してください。',
+  'bank.bankName': '銀行名',
+  'bank.bankNamePlaceholder': '例: 三菱UFJ銀行',
+  'bank.branchName': '支店名',
+  'bank.branchNamePlaceholder': '例: 渋谷支店',
+  'bank.accountType': '口座種別',
+  'bank.accountNumber': '口座番号',
+  'bank.accountNumberPlaceholder': '例: 1234567',
+  'bank.accountHolder': '口座名義（カタカナ）',
+  'bank.accountHolderPlaceholder': '例: ヤマダ タロウ',
+  'bank.accountHolderHint': '※ 銀行に登録されているカタカナ表記でご入力ください',
+  'bank.save': '保存する',
+  'bank.saveSuccess': '銀行口座を保存しました',
+  'bank.saveError': '保存に失敗しました',
+  'bank.errorBankName': '銀行名を入力してください',
+  'bank.errorBranchName': '支店名を入力してください',
+  'bank.errorAccountNumber': '口座番号を入力してください',
+  'bank.errorAccountHolder': '口座名義を入力してください',
+
+  // Withdrawal Screen
+  'withdrawal.title': '出金申請',
+  'withdrawal.availableBalance': '出金可能残高',
+  'withdrawal.totalEarned': '累計受取額',
+  'withdrawal.totalWithdrawn': '申請済み合計',
+  'withdrawal.bankAccount': '振込先口座',
+  'withdrawal.edit': '変更',
+  'withdrawal.register': '登録',
+  'withdrawal.registerBankAccount': '銀行口座を登録する',
+  'withdrawal.requestTitle': '出金申請',
+  'withdrawal.minAmountNote': '最低申請金額: ¥1,000',
+  'withdrawal.submit': '申請する',
+  'withdrawal.history': '申請履歴',
+  'withdrawal.pendingNote': '現在、申請処理中です。振込完了まで数日お待ちください。',
+  'withdrawal.confirmTitle': '出金申請の確認',
+  'withdrawal.confirmMessage': '¥{{amount}} の出金を申請しますか？',
+  'withdrawal.submitSuccess': '出金申請を受け付けました。数日以内に振込いたします。',
+  'withdrawal.submitError': '申請に失敗しました',
+  'withdrawal.errorMinAmount': '最低申請金額は¥1,000です',
+  'withdrawal.errorNoBankAccount': '銀行口座を登録してください',
+  'withdrawal.errorInsufficientBalance': '残高が不足しています',
 
   // My Library（本棚）
   'library.title': '本棚',

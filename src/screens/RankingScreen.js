@@ -9,16 +9,17 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { igsAPI } from '../api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { igsAPI, seriesAPI } from '../api/client';
 import HeatRing from '../components/HeatRing';
 import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
 
-const TABS = ['Popular', 'Trending', 'New'];
-const TAB_KEYS = ['popular', 'trending', 'new'];
+const TABS = ['人気', 'トレンド', '新着', 'シリーズ'];
+const TAB_KEYS = ['popular', 'trending', 'new', 'series'];
 
 // ランキングカード（ランク番号は表示しない）
-function SeriesCard({ series, onPress }) {
+function SeriesCard({ series, onPress, onCreatorPress }) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.cardInner}>
@@ -38,9 +39,11 @@ function SeriesCard({ series, onPress }) {
           <Text style={styles.seriesTitle} numberOfLines={2}>
             {series.title}
           </Text>
-          <Text style={styles.creatorName} numberOfLines={1}>
-            @{series.creator_username || series.creator_name}
-          </Text>
+          <TouchableOpacity onPress={onCreatorPress} activeOpacity={0.7}>
+            <Text style={styles.creatorName} numberOfLines={1}>
+              @{series.creator_username || series.creator_name}
+            </Text>
+          </TouchableOpacity>
           {series.genre ? (
             <View style={styles.genreBadge}>
               <Text style={styles.genreText}>{series.genre}</Text>
@@ -75,18 +78,28 @@ function SeriesCard({ series, onPress }) {
 }
 
 export default function RankingScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState(0);
-  const [data, setData] = useState({ popular: [], trending: [], new: [] });
+  const [data, setData] = useState({ popular: [], trending: [], new: [], series: [] });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    const type = TAB_KEYS[activeTab];
+  const loadAll = useCallback(async () => {
     try {
       setError('');
-      const res = await igsAPI.getRanking(type, 50);
-      setData(prev => ({ ...prev, [type]: res.series || [] }));
+      const [popular, trending, newItems, allSeries] = await Promise.all([
+        igsAPI.getRanking('popular', 50),
+        igsAPI.getRanking('trending', 50),
+        igsAPI.getRanking('new', 50),
+        seriesAPI.getAll().catch(() => ({ series: [] })),
+      ]);
+      setData({
+        popular: popular.series || [],
+        trending: trending.series || [],
+        new: newItems.series || [],
+        series: allSeries.series || [],
+      });
     } catch (e) {
       console.error('Ranking error:', e);
       setError('ランキングの読み込みに失敗しました');
@@ -94,22 +107,21 @@ export default function RankingScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeTab]);
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
-    load();
-  }, [activeTab]);
+    loadAll();
+  }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    load();
+    loadAll();
   };
 
   const currentList = data[TAB_KEYS[activeTab]];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* タブバー */}
       <View style={styles.tabBar}>
         {TABS.map((tab, i) => (
@@ -140,9 +152,8 @@ export default function RankingScreen({ navigation }) {
           renderItem={({ item }) => (
             <SeriesCard
               series={item}
-              onPress={() =>
-                navigation?.navigate('SeriesDetail', { seriesId: item.id })
-              }
+              onPress={() => navigation?.navigate('SeriesDetail', { seriesId: item.id })}
+              onCreatorPress={() => navigation?.navigate('UserProfile', { username: item.creator_username || item.creator_name })}
             />
           )}
           refreshControl={

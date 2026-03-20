@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TEZUKA",
+    "name": "LORE MANGA",
     "slug": "tezuka",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,8 @@
       "bundleIdentifier": "com.tezuka72.tezuka",
       "buildNumber": "1.0.0",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "プロフィール写真を設定するために写真ライブラリへのアクセスが必要です。"
       }
     },
     "android": {

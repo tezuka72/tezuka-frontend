@@ -8,8 +8,10 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const LOGO = require('../../assets/logo.png');
 import { useAuth } from '../context/AuthContext';
@@ -18,15 +20,18 @@ import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
 
 export default function LoginScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { login } = useAuth();
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     try {
       setError('');
+      setIsLoading(true);
       const result = await login(email, password);
       if (result.success) {
         navigation?.navigate('MainTabs');
@@ -35,6 +40,8 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (err) {
       setError(err.message || t('login.error'));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -42,7 +49,7 @@ export default function LoginScreen({ navigation }) {
     <LinearGradient
       colors={['#FFD60A', '#FFFFFF', '#29B6F6']}
       locations={[0, 0.45, 1]}
-      style={styles.gradient}
+      style={[styles.gradient, { paddingTop: insets.top }]}
     >
     <KeyboardAvoidingView
       style={styles.container}
@@ -51,7 +58,7 @@ export default function LoginScreen({ navigation }) {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.logoText}>TEZUKA</Text>
+          <Text style={styles.logoText}>LORE MANGA</Text>
         </View>
 
         <Text style={styles.title}>{t('login.title')}</Text>
@@ -83,8 +90,17 @@ export default function LoginScreen({ navigation }) {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>{t('login.button')}</Text>
+          <TouchableOpacity style={[styles.button, isLoading && { opacity: 0.7 }]} onPress={handleLogin} disabled={isLoading}>
+            {isLoading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.buttonText}>{t('login.button')}</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.forgotButton}
+            onPress={() => navigation?.navigate('ForgotPassword')}
+          >
+            <Text style={styles.forgotText}>パスワードを忘れた方</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -174,8 +190,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  forgotButton: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  forgotText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   linkButton: {
-    marginTop: 24,
+    marginTop: 16,
     alignItems: 'center',
   },
   linkText: {

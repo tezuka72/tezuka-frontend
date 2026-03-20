@@ -31,6 +31,14 @@ export function LanguageProvider({ children }) {
 
 export function useLanguage() {
   const { lang, toggleLanguage } = useContext(LanguageContext);
-  const t = (key) => translations[lang]?.[key] ?? translations['ja'][key] ?? key;
+  const t = (key, params) => {
+    let str = translations[lang]?.[key] ?? translations['ja'][key] ?? key;
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        str = str.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+      });
+    }
+    return str;
+  };
   return { lang, toggleLanguage, t };
 }

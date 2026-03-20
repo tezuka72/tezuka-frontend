@@ -23,9 +23,9 @@ export async function shareSeries(seriesId, episodeId = null, seriesTitle = '', 
   try {
     const { share_code } = await shareAPI.create(seriesId, episodeId);
     const url = `${WEB_BASE}/s/${share_code}`;
-    const message = seriesTitle ? `${seriesTitle} - TEZUKA\n${url}` : url;
+    const message = seriesTitle ? `${seriesTitle} - LORE MANGA\n${url}` : url;
 
-    const result = await Share.share({ message, url, title: seriesTitle || 'TEZUKA' });
+    const result = await Share.share({ message, url, title: seriesTitle || 'LORE MANGA' });
 
     if (result.action === Share.sharedAction && footprintCallback) {
       footprintCallback();

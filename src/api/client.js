@@ -1,10 +1,12 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-// 開発時はlocalhost、本番はRenderを使用
-const API_BASE_URL = __DEV__
+// ネイティブ開発時のみlocalhost、それ以外（Web含む）はRenderを使用
+// Web版では localhost は閲覧者自身のマシンを指すため本番URLを使う
+const API_BASE_URL = (__DEV__ && Platform.OS !== 'web')
   ? 'http://localhost:3000/api/v1'
-  : 'https://tezuka-backend-1.onrender.com/api/v1';
+  : 'https://api.loremanga.com/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -77,8 +79,39 @@ export const userAPI = {
     const response = await api.get(`/users/${userId}`);
     return response.data;
   },
+  getUserPosts: async (username) => {
+    const response = await api.get(`/users/${username}/posts`);
+    return response.data; // { posts: [...] }
+  },
+  updateProfile: async (data) => {
+    const response = await api.put('/users/profile', data);
+    return response.data; // { message, user }
+  },
+  uploadAvatar: async (imageUri) => {
+    const token = await AsyncStorage.getItem('authToken');
+    const formData = new FormData();
+    const filename = imageUri.split('/').pop();
+    const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+    const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+    formData.append('avatar', { uri: imageUri, name: filename, type: mimeType });
+    const res = await fetch(`${API_BASE_URL}/users/profile/avatar`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to upload avatar');
+    return res.json(); // { avatar_url }
+  },
   getFollowing: async () => {
     const response = await api.get('/users/me/following');
+    return response.data;
+  },
+  follow: async (userId) => {
+    const response = await api.post(`/users/${userId}/follow`);
+    return response.data;
+  },
+  unfollow: async (userId) => {
+    const response = await api.delete(`/users/${userId}/follow`);
     return response.data;
   },
 };
@@ -100,9 +133,24 @@ export const postAPI = {
     const response = await api.delete(`/posts/${postId}/like`);
     return response.data;
   },
-  addComment: async (postId, content) => {
-    const response = await api.post(`/posts/${postId}/comments`, { content });
+  addComment: async (postId, content, parentCommentId = null) => {
+    const response = await api.post(`/posts/${postId}/comments`, {
+      content,
+      ...(parentCommentId ? { parent_comment_id: parentCommentId } : {}),
+    });
     return response.data;
+  },
+  getReplies: async (postId, commentId) => {
+    const response = await api.get(`/posts/${postId}/comments/${commentId}/replies`);
+    return response.data; // { replies: [...] }
+  },
+  likeComment: async (postId, commentId) => {
+    const response = await api.post(`/posts/${postId}/comments/${commentId}/like`);
+    return response.data; // { liked: true, like_count: N }
+  },
+  unlikeComment: async (postId, commentId) => {
+    const response = await api.delete(`/posts/${postId}/comments/${commentId}/like`);
+    return response.data; // { liked: false, like_count: N }
   },
   delete: async (postId) => {
     const response = await api.delete(`/posts/${postId}`);
@@ -143,6 +191,10 @@ export const feedAPI = {
     const response = await api.get('/feed/following');
     return response.data;
   },
+  search: async (q, limit = 20) => {
+    const response = await api.get('/feed/search', { params: { q, limit } });
+    return response.data; // { posts, query }
+  },
 };
 
 export const bookmarkAPI = {
@@ -165,6 +217,10 @@ export const seriesAPI = {
     const response = await api.get('/series');
     return response.data;
   },
+  getMySeries: async (username) => {
+    const response = await api.get(`/users/${username}/series`);
+    return response.data; // { series: [...] }
+  },
   getById: async (seriesId) => {
     const response = await api.get(`/series/${seriesId}`);
     return response.data;
@@ -172,6 +228,19 @@ export const seriesAPI = {
   getPosts: async (seriesId) => {
     const response = await api.get(`/series/${seriesId}`);
     return { posts: response.data.episodes || [] };
+  },
+  create: async (formData) => {
+    const token = await AsyncStorage.getItem('authToken');
+    const res = await fetch(`${API_BASE_URL}/series`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create series');
+    }
+    return res.json();
   },
 };
 
@@ -405,6 +474,40 @@ export const messageAPI = {
     const response = await api.put(`/messages/conversations/${convId}/read`);
     return response.data;
   },
+  getConversationDetails: async (convId) => {
+    const response = await api.get(`/messages/conversations/${convId}`);
+    return response.data; // { id, name, type, icon_url, members: [{user_id, username, display_name, avatar_url, role}] }
+  },
+  updateGroup: async (convId, data) => {
+    const response = await api.put(`/messages/conversations/${convId}`, data);
+    return response.data;
+  },
+  updateGroupIcon: async (convId, formData) => {
+    const token = await AsyncStorage.getItem('authToken');
+    const res = await fetch(`${API_BASE_URL}/messages/conversations/${convId}/icon`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to update icon');
+    return res.json();
+  },
+  addMember: async (convId, userId) => {
+    const response = await api.post(`/messages/conversations/${convId}/members`, { user_id: userId });
+    return response.data;
+  },
+  removeMember: async (convId, userId) => {
+    const response = await api.delete(`/messages/conversations/${convId}/members/${userId}`);
+    return response.data;
+  },
+  updateMemberRole: async (convId, userId, role) => {
+    const response = await api.put(`/messages/conversations/${convId}/members/${userId}/role`, { role });
+    return response.data;
+  },
+  leaveGroup: async (convId) => {
+    const response = await api.delete(`/messages/conversations/${convId}/members/me`);
+    return response.data;
+  },
 };
 
 // 出金（銀行口座登録・出金申請）
@@ -439,5 +542,53 @@ export const creatorAPI = {
     if (cursor) params.cursor = cursor;
     const response = await api.get(`/creator/series/${seriesId}/early-fans`, { params });
     return response.data; // { fans, next_cursor, has_more, series_first_published_at }
+  },
+};
+
+// 読者分析
+export const analyticsAPI = {
+  getSeries: async (seriesId) => {
+    const response = await api.get(`/analytics/series/${seriesId}`);
+    return response.data;
+    // { series, episodes_stats, footprint_summary, view_trend, fan_trend, gift_earnings }
+  },
+  getOverview: async () => {
+    const response = await api.get('/analytics/overview');
+    return response.data; // { series: [...] }
+  },
+};
+
+// プッシュ通知
+export const notificationAPI = {
+  saveToken: async (token) => {
+    const response = await api.post('/notifications/token', { token });
+    return response.data;
+  },
+  notifyFollowers: async (seriesId, title, body) => {
+    const response = await api.post(`/notifications/series/${seriesId}/update`, { title, body });
+    return response.data;
+  },
+};
+
+// コミュニティ掲示板
+export const boardAPI = {
+  getPosts: async (seriesId, limit = 30, offset = 0) => {
+    const response = await api.get(`/board/${seriesId}`, { params: { limit, offset } });
+    return response.data; // { posts: [...] }
+  },
+  getReplies: async (seriesId, postId) => {
+    const response = await api.get(`/board/${seriesId}/replies/${postId}`);
+    return response.data; // { replies: [...] }
+  },
+  post: async (seriesId, content, parentId = null) => {
+    const response = await api.post(`/board/${seriesId}`, {
+      content,
+      ...(parentId ? { parent_id: parentId } : {}),
+    });
+    return response.data; // { post: {...} }
+  },
+  delete: async (seriesId, postId) => {
+    const response = await api.delete(`/board/${seriesId}/${postId}`);
+    return response.data;
   },
 };

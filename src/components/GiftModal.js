@@ -33,7 +33,7 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
     setIsProcessing(true);
     try {
       // Payment Intent作成
-      const { clientSecret, creator_receives } =
+      const { clientSecret } =
         await giftAPI.createPaymentIntent(selectedAmount, receiverId, postId);
 
       // Stripe決済画面表示
@@ -46,7 +46,7 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
       } else if (paymentIntent) {
         Alert.alert(
           t('common.success'),
-          `¥${selectedAmount}${t('gift.successMessage')}${creator_receives}${t('gift.successSuffix')}`
+          `¥${selectedAmount}${t('gift.successMessage')}`
         );
         onClose();
       }
@@ -80,12 +80,6 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
             ))}
           </View>
 
-          <View style={styles.info}>
-            <Text style={styles.infoText}>
-              {t('gift.creatorReceives')}{selectedAmount ? Math.floor(selectedAmount * 0.6) : 0}{t('gift.creatorReceivesSuffix')}
-            </Text>
-            <Text style={styles.feeText}>{t('gift.fee')}</Text>
-          </View>
 
           <View style={styles.actions}>
             <TouchableOpacity

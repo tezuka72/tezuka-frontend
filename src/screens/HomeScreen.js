@@ -9,11 +9,12 @@ import {
   Dimensions,
   Animated,
   TouchableWithoutFeedback,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { feedAPI, postAPI, bookmarkAPI } from '../api/client';
+import { feedAPI, postAPI, bookmarkAPI, adAPI } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
 
@@ -23,8 +24,9 @@ const TAB_BAR_HEIGHT = 60;
 // =====================
 // 単一投稿フルスクリーンアイテム
 // =====================
-const PostItem = memo(function PostItem({ post, navigation }) {
+const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
   const insets = useSafeAreaInsets();
+  const ITEM_HEIGHT = itemHeight > 0 ? itemHeight : SCREEN_HEIGHT;
   const [isLiked, setIsLiked] = useState(post.is_liked || false);
   const [likeCount, setLikeCount] = useState(post.like_count || 0);
   const [isBookmarked, setIsBookmarked] = useState(post.is_bookmarked || false);
@@ -32,6 +34,7 @@ const PostItem = memo(function PostItem({ post, navigation }) {
 
   // ダブルタップ検出
   const lastTap = useRef(null);
+  const tapTimeout = useRef(null);
   // ハートアニメーション
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
@@ -77,10 +80,18 @@ const PostItem = memo(function PostItem({ post, navigation }) {
   const handleTap = () => {
     const now = Date.now();
     if (lastTap.current && now - lastTap.current < 350) {
-      triggerLike();
+      // ダブルタップ → いいね
+      clearTimeout(tapTimeout.current);
+      tapTimeout.current = null;
       lastTap.current = null;
+      triggerLike();
     } else {
+      // 1回目のタップ → 350ms待って遷移
       lastTap.current = now;
+      tapTimeout.current = setTimeout(() => {
+        tapTimeout.current = null;
+        navigation?.navigate('PostDetail', { postId: post.id });
+      }, 350);
     }
   };
 
@@ -119,7 +130,7 @@ const PostItem = memo(function PostItem({ post, navigation }) {
 
   return (
     <TouchableWithoutFeedback onPress={handleTap}>
-      <View style={styles.postItem}>
+      <View style={[styles.postItem, { height: ITEM_HEIGHT }]}>
 
         {/* ===== 画像ページャー（横スクロール） ===== */}
         {pageCount > 0 ? (
@@ -139,7 +150,7 @@ const PostItem = memo(function PostItem({ post, navigation }) {
             renderItem={({ item }) => (
               <Image
                 source={{ uri: item.image_url || item }}
-                style={styles.pageImage}
+                style={[styles.pageImage, { height: ITEM_HEIGHT }]}
                 resizeMode="contain"
               />
             )}
@@ -216,7 +227,11 @@ const PostItem = memo(function PostItem({ post, navigation }) {
 
         {/* ===== 左下 作者・タイトル情報 ===== */}
         <View style={[styles.bottomInfo, { paddingBottom: bottomPad }]}>
-          <View style={styles.authorRow}>
+          <TouchableOpacity
+            style={styles.authorRow}
+            activeOpacity={0.8}
+            onPress={() => navigation?.navigate('UserProfile', { username: post.creator_username || post.username })}
+          >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
                 {(post.display_name || post.creator_name)?.[0]?.toUpperCase() || '?'}
@@ -225,13 +240,17 @@ const PostItem = memo(function PostItem({ post, navigation }) {
             <Text style={styles.authorName} numberOfLines={1}>
               {post.display_name || post.creator_name || post.username}
             </Text>
-          </View>
+          </TouchableOpacity>
 
           {post.series_title ? (
-            <View style={styles.seriesBadge}>
+            <TouchableOpacity
+              style={styles.seriesBadge}
+              onPress={() => post.series_id && navigation?.navigate('SeriesDetail', { seriesId: post.series_id })}
+              activeOpacity={0.8}
+            >
               <Ionicons name="book-outline" size={11} color="#FFFFFF" />
               <Text style={styles.seriesBadgeText}> {post.series_title}</Text>
-            </View>
+            </TouchableOpacity>
           ) : null}
 
           <Text style={styles.postTitle} numberOfLines={2}>
@@ -271,17 +290,54 @@ const PostItem = memo(function PostItem({ post, navigation }) {
 });
 
 // =====================
+// 広告アイテム（フルスクリーン）
+// =====================
+const AdItem = memo(function AdItem({ ad, itemHeight }) {
+  const insets = useSafeAreaInsets();
+  const ITEM_HEIGHT = itemHeight > 0 ? itemHeight : SCREEN_HEIGHT;
+  return (
+    <TouchableOpacity
+      style={[styles.container, { height: ITEM_HEIGHT }]}
+      activeOpacity={0.95}
+      onPress={() => ad.target_url && Linking.openURL(ad.target_url).catch(() => {})}
+    >
+      {ad.image_url ? (
+        <Image source={{ uri: ad.image_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.card }]} />
+      )}
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.85)']}
+        style={[styles.gradient, { height: ITEM_HEIGHT * 0.5 }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      />
+      <View style={[styles.bottomInfo, { paddingBottom: insets.bottom + 70 }]}>
+        <View style={styles.adBadge}>
+          <Text style={styles.adBadgeText}>広告</Text>
+        </View>
+        <Text style={styles.postTitle} numberOfLines={2}>{ad.title}</Text>
+        <Text style={styles.adCta}>タップして詳細を見る →</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+// =====================
 // メインスクリーン
 // =====================
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [posts, setPosts] = useState([]);
+  const [ad, setAd] = useState(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [listHeight, setListHeight] = useState(SCREEN_HEIGHT);
 
   useEffect(() => {
     loadPosts();
+    adAPI.getRandom().then(res => setAd(res)).catch(() => {});
   }, []);
 
   const loadPosts = async () => {
@@ -301,18 +357,28 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(false);
   };
 
+  // 5投稿ごとに広告を挿入
+  const feedItems = (() => {
+    if (!ad || posts.length === 0) return posts;
+    const result = [...posts];
+    result.splice(4, 0, { ...ad, _isAd: true, id: `ad_${ad.id}` });
+    return result;
+  })();
+
   const renderItem = useCallback(
-    ({ item }) => <PostItem post={item} navigation={navigation} />,
-    [navigation]
+    ({ item }) => item._isAd
+      ? <AdItem ad={item} itemHeight={listHeight} />
+      : <PostItem post={item} navigation={navigation} itemHeight={listHeight} />,
+    [navigation, listHeight, ad]
   );
 
   const getItemLayout = useCallback(
     (_, index) => ({
-      length: SCREEN_HEIGHT,
-      offset: SCREEN_HEIGHT * index,
+      length: listHeight,
+      offset: listHeight * index,
       index,
     }),
-    []
+    [listHeight]
   );
 
   if (error && posts.length === 0) {
@@ -330,10 +396,10 @@ export default function HomeScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}>
       <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id.toString()}
+        data={feedItems}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         pagingEnabled
         showsVerticalScrollIndicator={false}
@@ -348,6 +414,14 @@ export default function HomeScreen({ navigation }) {
         onRefresh={handleRefresh}
         refreshing={refreshing}
       />
+      {/* 検索ボタン（フローティング） */}
+      <TouchableOpacity
+        style={[styles.searchFab, { top: insets.top + 12 }]}
+        onPress={() => navigation?.navigate('Search')}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="search-outline" size={22} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -359,6 +433,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  searchFab: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // ---- 投稿アイテム ----
@@ -548,5 +632,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
+  },
+  adBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  adBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  adCta: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    marginTop: 6,
   },
 });
