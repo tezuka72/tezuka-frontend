@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,11 @@ import {
   StyleSheet,
   Dimensions,
   Linking,
+  Animated,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { postAPI, footprintAPI, affiliateAPI, tipsAPI, bookmarkAPI } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
@@ -43,6 +48,17 @@ export default function PostDetailScreen({ route, navigation }) {
   const [replyingTo, setReplyingTo] = useState(null); // { id, username }
   const [expandedReplies, setExpandedReplies] = useState({}); // { commentId: [replies] }
   const [commentLikes, setCommentLikes] = useState({}); // { commentId: { liked, count } }
+  const [commentsVisible, setCommentsVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const openComments = () => {
+    setCommentsVisible(true);
+    Animated.spring(slideAnim, { toValue: 1, useNativeDriver: true, tension: 65, friction: 11 }).start();
+  };
+
+  const closeComments = () => {
+    Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => setCommentsVisible(false));
+  };
 
   useEffect(() => {
     loadPost();
@@ -359,10 +375,10 @@ export default function PostDetailScreen({ route, navigation }) {
                 <Text style={styles.actionIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
                 <Text style={styles.actionText}>{post.like_count || 0}</Text>
               </TouchableOpacity>
-              <View style={styles.actionButton}>
+              <TouchableOpacity style={styles.actionButton} onPress={openComments}>
                 <Text style={styles.actionIcon}>💬</Text>
                 <Text style={styles.actionText}>{post.comment_count || 0}</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.actionButton}>
                 <Text style={styles.actionIcon}>👁️</Text>
                 <Text style={styles.actionText}>{post.view_count || 0}</Text>
@@ -469,42 +485,60 @@ export default function PostDetailScreen({ route, navigation }) {
         </ScrollView>
       </View>
 
-      {/* 下部：コメントパネル（独立スクロール） */}
-      <View style={styles.commentsPanel}>
-        <View style={styles.commentsPanelHandle}>
-          <View style={styles.handleBar} />
-          <Text style={styles.commentsPanelTitle}>
-            💬 {t('postDetail.comments')} {comments.length > 0 ? `(${comments.length})` : ''}
-          </Text>
-        </View>
-        <ScrollView style={styles.commentsScroll} keyboardShouldPersistTaps="handled">
-          {comments.length === 0 ? (
-            <Text style={styles.noComments}>まだコメントはありません</Text>
-          ) : (
-            comments.map(renderComment)
-          )}
-        </ScrollView>
-        {replyingTo && (
-          <View style={styles.replyingBar}>
-            <Text style={styles.replyingText}>@{replyingTo.username} に返信中</Text>
-            <TouchableOpacity onPress={() => setReplyingTo(null)}>
-              <Ionicons name="close" size={16} color={Colors.muted} />
-            </TouchableOpacity>
-          </View>
-        )}
-        <View style={styles.commentInput}>
-          <TextInput
-            style={styles.input}
-            placeholder={replyingTo ? `@${replyingTo.username} への返信...` : t('postDetail.commentPlaceholder')}
-            placeholderTextColor={Colors.muted}
-            value={commentText}
-            onChangeText={setCommentText}
-          />
-          <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
-            <Text style={styles.sendButtonText}>{t('postDetail.send')}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* コメントボトムシート */}
+      <Modal visible={commentsVisible} transparent animationType="none" onRequestClose={closeComments}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableWithoutFeedback onPress={closeComments}>
+            <View style={styles.modalOverlay} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[styles.commentsPanel, {
+            transform: [{
+              translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [SCREEN_HEIGHT * 0.6, 0] })
+            }]
+          }]}>
+            <View style={styles.commentsPanelHandle}>
+              <View style={styles.handleBarWrapper}>
+                <View style={styles.handleBar} />
+              </View>
+              <View style={styles.commentsPanelTitleRow}>
+                <Text style={styles.commentsPanelTitle}>
+                  💬 {t('postDetail.comments')} {comments.length > 0 ? `(${comments.length})` : ''}
+                </Text>
+                <TouchableOpacity onPress={closeComments} style={styles.closeBtn}>
+                  <Ionicons name="close" size={20} color={Colors.muted} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <ScrollView style={styles.commentsScroll} keyboardShouldPersistTaps="handled">
+              {comments.length === 0 ? (
+                <Text style={styles.noComments}>まだコメントはありません</Text>
+              ) : (
+                comments.map(renderComment)
+              )}
+            </ScrollView>
+            {replyingTo && (
+              <View style={styles.replyingBar}>
+                <Text style={styles.replyingText}>@{replyingTo.username} に返信中</Text>
+                <TouchableOpacity onPress={() => setReplyingTo(null)}>
+                  <Ionicons name="close" size={16} color={Colors.muted} />
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={styles.commentInput}>
+              <TextInput
+                style={styles.input}
+                placeholder={replyingTo ? `@${replyingTo.username} への返信...` : t('postDetail.commentPlaceholder')}
+                placeholderTextColor={Colors.muted}
+                value={commentText}
+                onChangeText={setCommentText}
+              />
+              <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
+                <Text style={styles.sendButtonText}>{t('postDetail.send')}</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <SupportModal
         visible={supportModalVisible}
@@ -530,29 +564,47 @@ const styles = StyleSheet.create({
   mangaArea: {
     flex: 1,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
   commentsPanel: {
-    height: SCREEN_HEIGHT * 0.38,
+    height: SCREEN_HEIGHT * 0.6,
     backgroundColor: Colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
   commentsPanelHandle: {
-    alignItems: 'center',
-    paddingVertical: 8,
+    paddingTop: 10,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  handleBarWrapper: {
+    alignItems: 'center',
+    marginBottom: 10,
   },
   handleBar: {
     width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.border,
-    marginBottom: 6,
+  },
+  commentsPanelTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   commentsPanelTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.foreground,
+    flex: 1,
+  },
+  closeBtn: {
+    padding: 4,
   },
   commentsScroll: {
     flex: 1,
