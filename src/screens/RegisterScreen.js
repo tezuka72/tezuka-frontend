@@ -56,7 +56,9 @@ export default function RegisterScreen({ navigation }) {
       setError('');
       setIsLoading(true);
       const result = await register(username, email, password, displayName);
-      if (!result.success) {
+      if (result.success && result.requiresVerification) {
+        navigation?.navigate('EmailVerification', { email: result.email });
+      } else if (!result.success) {
         setError(result.error || t('register.error'));
       }
     } catch (err) {

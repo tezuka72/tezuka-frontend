@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useStripe } from '../utils/stripe';
 import { giftAPI } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function GiftModal({ visible, onClose, receiverId, postId }) {
-  const stripe = useStripe();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { t } = useLanguage();
   const [packages, setPackages] = useState([]);
   const [selectedAmount, setSelectedAmount] = useState(null);
+  const [selectedPackageId, setSelectedPackageId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
@@ -32,21 +33,46 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
 
     setIsProcessing(true);
     try {
-      // Payment Intent作成
-      const { clientSecret } =
+      // Payment Intent作成（Customer・EphemeralKeyも返ってくる）
+      const { clientSecret, payment_intent_id, ephemeralKeySecret, customerId } =
         await giftAPI.createPaymentIntent(selectedAmount, receiverId, postId);
 
-      // Stripe決済画面表示
-      const { error, paymentIntent } = await stripe.confirmPayment(clientSecret, {
-        paymentMethodType: 'Card',
+      // PaymentSheetを初期化（保存済みカードの表示・新規カード保存が可能）
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        customerEphemeralKeySecret: ephemeralKeySecret,
+        customerId,
+        merchantDisplayName: 'LORE MANGA',
+        allowsDelayedPaymentMethods: false,
       });
 
-      if (error) {
-        Alert.alert(t('common.error'), error.message);
-      } else if (paymentIntent) {
+      if (initError) {
+        Alert.alert(t('common.error'), initError.message);
+        return;
+      }
+
+      // PaymentSheetを表示してユーザーが決済
+      const { error: payError } = await presentPaymentSheet();
+
+      if (payError) {
+        // キャンセルは無視、その他はエラー表示
+        if (payError.code !== 'Canceled') {
+          Alert.alert(t('common.error'), payError.message);
+        }
+      } else {
+        // 決済成功 → バックエンドにDB記録を依頼
+        // payment_intent_idはclientSecretから取り出せる（"pi_xxx_secret_yyy" の先頭部分）
+        const piId = payment_intent_id || clientSecret.split('_secret_')[0];
+        try {
+          await giftAPI.sendGift(piId, receiverId, postId, selectedAmount);
+        } catch (recordError) {
+          // 記録失敗はWebhookで補完されるためユーザーには通知しない
+          console.error('Gift record error (webhook will handle):', recordError);
+        }
+        const creatorReceives = Math.ceil(selectedAmount * 0.6);
         Alert.alert(
           t('common.success'),
-          `¥${selectedAmount}${t('gift.successMessage')}`
+          `¥${selectedAmount}${t('gift.successMessage')}¥${creatorReceives}${t('gift.successSuffix')}`
         );
         onClose();
       }
@@ -71,7 +97,7 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
                   styles.package,
                   selectedAmount === pkg.amount && styles.packageSelected,
                 ]}
-                onPress={() => setSelectedAmount(pkg.amount)}
+                onPress={() => { setSelectedAmount(pkg.amount); setSelectedPackageId(pkg.id); }}
               >
                 <Text style={styles.emoji}>{pkg.emoji}</Text>
                 <Text style={styles.packageName}>{pkg.name}</Text>

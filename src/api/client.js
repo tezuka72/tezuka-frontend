@@ -2,11 +2,11 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// ネイティブ開発時のみlocalhost、それ以外（Web含む）はRenderを使用
-// Web版では localhost は閲覧者自身のマシンを指すため本番URLを使う
+// ネイティブ開発時のみlocalhost、それ以外（Web含む）は本番URLを使用
+const PROD_API_URL = 'https://tezuka-backend-2.onrender.com/api/v1';
 const API_BASE_URL = (__DEV__ && Platform.OS !== 'web')
   ? 'http://localhost:3000/api/v1'
-  : 'https://api.loremanga.com/api/v1';
+  : PROD_API_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -70,6 +70,14 @@ export const authAPI = {
   },
   resetPassword: async (email, code, newPassword) => {
     const response = await api.post('/auth/reset-password', { email, code, newPassword });
+    return response.data;
+  },
+  verifyEmail: async (email, code) => {
+    const response = await api.post('/auth/verify-email', { email, code });
+    return response.data;
+  },
+  resendVerification: async (email) => {
+    const response = await api.post('/auth/resend-verification', { email });
     return response.data;
   },
 };
@@ -272,11 +280,12 @@ export const giftAPI = {
     const response = await api.get('/gifts/packages');
     return response.data;
   },
-  sendGift: async (receiverId, postId, packageId) => {
-    const response = await api.post('/gifts', { 
-      receiverId, 
-      postId, 
-      packageId 
+  sendGift: async (paymentIntentId, receiverId, postId, amount) => {
+    const response = await api.post('/gifts', {
+      payment_intent_id: paymentIntentId,
+      receiver_id: receiverId,
+      post_id: postId,
+      amount,
     });
     return response.data;
   },

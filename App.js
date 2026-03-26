@@ -6,7 +6,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform }
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import Constants from 'expo-constants';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -19,6 +19,7 @@ import LandingScreen from './src/screens/LandingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import SocialScreen from './src/screens/SocialScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -102,6 +103,7 @@ function GuestPromptScreen({ navigation }) {
 function MainTabs() {
   const { user, isGuest } = useAuth();
   const { t } = useLanguage();
+  const { bottom: bottomInset } = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -110,7 +112,7 @@ function MainTabs() {
         tabBarShowLabel: true,
         tabBarActiveTintColor: '#FFFFFF',
         tabBarInactiveTintColor: '#888888',
-        tabBarStyle: tabStyles.tabBar,
+        tabBarStyle: [tabStyles.tabBar, { position: 'absolute', height: 60 + bottomInset, paddingBottom: bottomInset + 4 }],
         tabBarLabelStyle: tabStyles.tabLabel,
         tabBarItemStyle: { flex: 1 },
       }}
@@ -184,6 +186,7 @@ function AppNavigator() {
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
       </Stack.Navigator>
     );
   }
@@ -196,6 +199,7 @@ function AppNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
       {/* 認証済みユーザー向け詳細画面 */}
       <Stack.Screen
         name="PostDetail"
@@ -317,10 +321,10 @@ export default function App() {
   const responseListener = useRef();
 
   // Web版でIoniconsフォントを読み込む
-  const [fontsLoaded] = useFonts(Ionicons.font);
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
 
   useEffect(() => {
-    if (!fontsLoaded) return;
+    if (!fontsLoaded && !fontError) return;
     registerForPushNotifications();
 
     notifListener.current = Notifications.addNotificationReceivedListener(() => {});
@@ -332,7 +336,7 @@ export default function App() {
     };
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
@@ -353,8 +357,6 @@ const tabStyles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#000',
     borderTopWidth: 0,
-    height: 60,
-    paddingBottom: 8,
     paddingTop: 4,
   },
   tabLabel: {

@@ -73,9 +73,12 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
+      const data = error.response?.data;
       return {
         success: false,
-        error: error.response?.data?.error || 'Login failed',
+        error: data?.error || 'Login failed',
+        requiresVerification: data?.requiresVerification || false,
+        email: data?.email,
       };
     }
   };
@@ -83,10 +86,14 @@ export const AuthProvider = ({ children }) => {
   const register = async (username, email, password, displayName) => {
     try {
       const response = await authAPI.register(username, email, password, displayName);
-      
+
+      if (response.requiresVerification) {
+        return { success: true, requiresVerification: true, email: response.email };
+      }
+
       await AsyncStorage.setItem('authToken', response.token);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      
+
       setAuthToken(response.token);
       setUser(response.user);
       setIsGuest(false);
@@ -98,6 +105,26 @@ export const AuthProvider = ({ children }) => {
       const message = data?.error
         || (data?.errors?.[0]?.msg)
         || 'Registration failed';
+      return { success: false, error: message };
+    }
+  };
+
+  const verifyEmail = async (email, code) => {
+    try {
+      const response = await authAPI.verifyEmail(email, code);
+
+      await AsyncStorage.setItem('authToken', response.token);
+      await AsyncStorage.setItem('user', JSON.stringify(response.user));
+
+      setAuthToken(response.token);
+      setUser(response.user);
+      setIsGuest(false);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Verify email error:', error);
+      const data = error.response?.data;
+      const message = data?.error || 'メール確認に失敗しました';
       return { success: false, error: message };
     }
   };
@@ -127,6 +154,7 @@ export const AuthProvider = ({ children }) => {
     isGuest,
     login,
     register,
+    verifyEmail,
     logout,
     updateUser,
     browseAsGuest,

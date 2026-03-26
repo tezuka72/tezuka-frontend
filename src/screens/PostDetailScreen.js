@@ -197,7 +197,7 @@ export default function PostDetailScreen({ route, navigation }) {
   const loadTopTippers = async () => {
     try {
       const response = await tipsAPI.getTopTippers(postId);
-      setTopTippers(response.tippers || response.top_tippers || []);
+      setTopTippers(response.topTippers || response.tippers || []);
     } catch (e) {
       console.error('Load top tippers error:', e);
     }

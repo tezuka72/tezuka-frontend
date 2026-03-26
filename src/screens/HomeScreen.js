@@ -141,6 +141,7 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={pageCount > 1}
+            style={{ flex: 1 }}
             onMomentumScrollEnd={(e) => {
               const page = Math.round(
                 e.nativeEvent.contentOffset.x / SCREEN_WIDTH
@@ -148,11 +149,13 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
               setCurrentPage(page);
             }}
             renderItem={({ item }) => (
-              <Image
-                source={{ uri: item.image_url || item }}
-                style={[styles.pageImage, { height: ITEM_HEIGHT }]}
-                resizeMode="contain"
-              />
+              <View style={{ width: SCREEN_WIDTH, height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+                <Image
+                  source={{ uri: item.image_url || item }}
+                  style={{ width: SCREEN_WIDTH, height: ITEM_HEIGHT }}
+                  resizeMode="contain"
+                />
+              </View>
             )}
             getItemLayout={(_, index) => ({
               length: SCREEN_WIDTH,
@@ -333,7 +336,6 @@ export default function HomeScreen({ navigation }) {
   const [ad, setAd] = useState(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [listHeight, setListHeight] = useState(SCREEN_HEIGHT);
 
   useEffect(() => {
     loadPosts();
@@ -367,19 +369,36 @@ export default function HomeScreen({ navigation }) {
 
   const renderItem = useCallback(
     ({ item }) => item._isAd
-      ? <AdItem ad={item} itemHeight={listHeight} />
-      : <PostItem post={item} navigation={navigation} itemHeight={listHeight} />,
-    [navigation, listHeight, ad]
+      ? <AdItem ad={item} itemHeight={SCREEN_HEIGHT} />
+      : <PostItem post={item} navigation={navigation} itemHeight={SCREEN_HEIGHT} />,
+    [navigation, ad]
   );
 
   const getItemLayout = useCallback(
     (_, index) => ({
-      length: listHeight,
-      offset: listHeight * index,
+      length: SCREEN_HEIGHT,
+      offset: SCREEN_HEIGHT * index,
       index,
     }),
-    [listHeight]
+    []
   );
+
+  const feedItemsRef = useRef(feedItems);
+  useEffect(() => { feedItemsRef.current = feedItems; }, [feedItems]);
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 });
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    const visibleIndex = viewableItems[0]?.index ?? 0;
+    // 次の1〜2投稿の画像をプリフェッチ
+    [visibleIndex + 1, visibleIndex + 2].forEach((nextIdx) => {
+      const nextItem = feedItemsRef.current[nextIdx];
+      if (!nextItem || nextItem._isAd) return;
+      (nextItem.images || []).forEach((img) => {
+        const url = img?.image_url || img;
+        if (url) Image.prefetch(url);
+      });
+    });
+  });
 
   if (error && posts.length === 0) {
     return (
@@ -396,7 +415,7 @@ export default function HomeScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container} onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}>
+    <View style={styles.container}>
       <FlatList
         data={feedItems}
         keyExtractor={(item) => String(item.id)}
@@ -404,7 +423,10 @@ export default function HomeScreen({ navigation }) {
         pagingEnabled
         showsVerticalScrollIndicator={false}
         decelerationRate="fast"
+        style={{ flex: 1 }}
         getItemLayout={getItemLayout}
+        onViewableItemsChanged={onViewableItemsChanged.current}
+        viewabilityConfig={viewabilityConfig.current}
         // パフォーマンス設定
         initialNumToRender={2}
         maxToRenderPerBatch={3}

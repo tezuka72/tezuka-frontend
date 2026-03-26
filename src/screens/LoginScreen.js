@@ -35,6 +35,8 @@ export default function LoginScreen({ navigation }) {
       const result = await login(email, password);
       if (result.success) {
         navigation?.navigate('MainTabs');
+      } else if (result.requiresVerification) {
+        navigation?.navigate('EmailVerification', { email: result.email || email });
       } else {
         setError(result.error || t('login.error'));
       }
