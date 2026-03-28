@@ -236,7 +236,7 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
             onPress={() => setRepostModalVisible(true)}
             activeOpacity={0.7}
           >
-            <Text style={{ fontSize: 26, lineHeight: 32 }}>↩️</Text>
+            <Ionicons name="repeat" size={30} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
