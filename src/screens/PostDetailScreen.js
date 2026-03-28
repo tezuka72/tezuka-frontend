@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  Image,
   ScrollView,
   TextInput,
   TouchableOpacity,
@@ -14,8 +13,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { postAPI, footprintAPI, affiliateAPI, tipsAPI, bookmarkAPI } from '../api/client';
+import RepostModal from '../components/repost/RepostModal';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
@@ -49,6 +51,19 @@ export default function PostDetailScreen({ route, navigation }) {
   const [expandedReplies, setExpandedReplies] = useState({}); // { commentId: [replies] }
   const [commentLikes, setCommentLikes] = useState({}); // { commentId: { liked, count } }
   const [commentsVisible, setCommentsVisible] = useState(false);
+  const [repostModalVisible, setRepostModalVisible] = useState(false);
+  // 縦スクロール漫画のlazy loading: 最初の5枚だけ表示し、スクロールに応じて追加
+  const [visibleImageCount, setVisibleImageCount] = useState(5);
+
+  // visibleImageCount が増えるたびに次の3枚をプリフェッチ
+  useEffect(() => {
+    if (!post?.images) return;
+    const nextUrls = post.images
+      .slice(visibleImageCount, visibleImageCount + 3)
+      .map(img => img?.image_url || img)
+      .filter(Boolean);
+    if (nextUrls.length > 0) Image.prefetch(nextUrls);
+  }, [visibleImageCount, post]);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const openComments = () => {
@@ -72,6 +87,12 @@ export default function PostDetailScreen({ route, navigation }) {
       setError('');
       const response = await postAPI.getPost(postId);
       setPost(response.post);
+      // 最初の8枚をプリフェッチ
+      const urls = (response.post?.images || [])
+        .slice(0, 8)
+        .map(img => img?.image_url || img)
+        .filter(Boolean);
+      if (urls.length > 0) Image.prefetch(urls);
     } catch (e) {
       console.error('Load post error:', e);
       setError(t('postDetail.loadError'));
@@ -144,7 +165,23 @@ export default function PostDetailScreen({ route, navigation }) {
     }
   };
 
-  // スクロール末尾で読了足跡を記録
+  // 縦スクロール漫画のlazy loading: スクロール位置に応じて表示画像を追加
+  const handleMangaScroll = useCallback((e) => {
+    if (!post?.images) return;
+    const scrollY = e.nativeEvent.contentOffset.y;
+    const contentHeight = e.nativeEvent.contentSize.height;
+    const viewportHeight = e.nativeEvent.layoutMeasurement.height;
+    // 残りスクロール量がviewport2画面分以下になったら次の5枚を追加
+    if (contentHeight - scrollY - viewportHeight < viewportHeight * 2) {
+      setVisibleImageCount((prev) => Math.min(prev + 5, post.images.length));
+    }
+    // 末尾近く（90%）で読了足跡を記録
+    if (scrollY + viewportHeight > contentHeight * 0.9 && post?.series_id) {
+      footprintAPI.record(post.series_id, 'read_completed').catch(() => {});
+    }
+  }, [post]);
+
+  // スクロール末尾で読了足跡を記録（非縦スクロール用）
   const handleScrollEnd = () => {
     if (post?.series_id) {
       footprintAPI.record(post.series_id, 'read_completed').catch(() => {});
@@ -197,7 +234,7 @@ export default function PostDetailScreen({ route, navigation }) {
   const loadTopTippers = async () => {
     try {
       const response = await tipsAPI.getTopTippers(postId);
-      setTopTippers(response.topTippers || response.tippers || []);
+      setTopTippers(response?.topTippers || response?.tippers || []);
     } catch (e) {
       console.error('Load top tippers error:', e);
     }
@@ -286,25 +323,39 @@ export default function PostDetailScreen({ route, navigation }) {
 
       {/* 上部：漫画エリア（独立スクロール） */}
       <View style={styles.mangaArea}>
-        <ScrollView onScrollEndDrag={handleScrollEnd} scrollEventThrottle={400}>
+        <ScrollView
+          onScrollEndDrag={handleScrollEnd}
+          onScroll={post?.type === 'vertical_scroll' ? handleMangaScroll : undefined}
+          scrollEventThrottle={200}
+        >
           {post.images && post.images.length > 0 && (
             post.type === 'vertical_scroll' ? (
               <View>
-                {post.images.map((img, i) => (
+                {/* lazy load: 最初の visibleImageCount 枚だけレンダリング */}
+                {post.images.slice(0, visibleImageCount).map((img, i) => (
                   <Image
                     key={i}
                     source={{ uri: img?.image_url || img }}
                     style={styles.verticalImage}
-                    resizeMode="contain"
+                    contentFit="contain"
+                    transition={150}
                   />
                 ))}
+                {visibleImageCount < post.images.length && (
+                  <View style={styles.imageLoadingMore}>
+                    <ActivityIndicator size="small" color="#888" />
+                    <Text style={styles.imageLoadingText}>
+                      {visibleImageCount}/{post.images.length}ページ読み込み済み
+                    </Text>
+                  </View>
+                )}
               </View>
             ) : (
               <View style={styles.imageContainer}>
                 <Image
                   source={{ uri: post.images[currentImageIndex]?.image_url || post.images[currentImageIndex] }}
                   style={styles.image}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
                 <View style={styles.tapOverlay}>
                   <TouchableOpacity
@@ -399,6 +450,12 @@ export default function PostDetailScreen({ route, navigation }) {
                 </TouchableOpacity>
               )}
               <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => setRepostModalVisible(true)}
+              >
+                <Text style={{ fontSize: 20 }}>↩️</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={styles.supportButton}
                 onPress={() => setGiftModalVisible(true)}
               >
@@ -412,7 +469,7 @@ export default function PostDetailScreen({ route, navigation }) {
                 {products.map((product) => (
                   <View key={product.id} style={styles.productCard}>
                     {product.image_url ? (
-                      <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
+                      <Image source={{ uri: product.image_url }} style={styles.productImage} contentFit="cover" />
                     ) : (
                       <View style={[styles.productImage, styles.productImagePlaceholder]}>
                         <Text style={styles.productImagePlaceholderText}>🛍️</Text>
@@ -552,6 +609,24 @@ export default function PostDetailScreen({ route, navigation }) {
         receiverId={post.user_id}
         postId={post.id}
       />
+      {post.series_id && (
+        <RepostModal
+          visible={repostModalVisible}
+          onClose={() => setRepostModalVisible(false)}
+          repostType="page"
+          manga={{
+            id: post.series_id,
+            title: post.title,
+            cover_url: post.images?.[0]?.image_url || post.images?.[0] || '',
+          }}
+          page={post.images?.[currentImageIndex] ? {
+            id: post.images[currentImageIndex]?.id || String(currentImageIndex),
+            image_url: post.images[currentImageIndex]?.image_url || post.images[currentImageIndex],
+            page_number: currentImageIndex + 1,
+            episode_id: post.id,
+          } : undefined}
+        />
+      )}
     </View>
   );
 }
@@ -563,6 +638,15 @@ const styles = StyleSheet.create({
   },
   mangaArea: {
     flex: 1,
+  },
+  imageLoadingMore: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  imageLoadingText: {
+    color: '#888',
+    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,

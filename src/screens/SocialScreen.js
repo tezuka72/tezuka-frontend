@@ -6,7 +6,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { feedAPI, postAPI, messageAPI } from '../api/client';
+import { feedAPI, postAPI, messageAPI, repostAPI } from '../api/client';
+import RepostCard from '../components/repost/RepostCard';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../theme/colors';
@@ -131,12 +132,18 @@ export default function SocialScreen() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const navigation = useNavigation();
-  const [tab, setTab] = useState('friends'); // 'friends' | 'messages'
+  const [tab, setTab] = useState('friends'); // 'friends' | 'reposts' | 'messages'
 
   // フォロー中フィード
   const [posts, setPosts] = useState([]);
   const [postsRefreshing, setPostsRefreshing] = useState(false);
   const [postsError, setPostsError] = useState('');
+
+  // リポストタイムライン
+  const [reposts, setReposts] = useState([]);
+  const [repostsLoading, setRepostsLoading] = useState(false);
+  const [repostsRefreshing, setRepostsRefreshing] = useState(false);
+  const [repostsError, setRepostsError] = useState('');
 
   // メッセージ
   const [conversations, setConversations] = useState([]);
@@ -154,6 +161,19 @@ export default function SocialScreen() {
     }
   }, [t]);
 
+  const loadReposts = useCallback(async () => {
+    try {
+      setRepostsError('');
+      const response = await repostAPI.getTimeline({ limit: 20 });
+      setReposts(response.items || []);
+    } catch {
+      setRepostsError('リポストの読み込みに失敗しました');
+    } finally {
+      setRepostsLoading(false);
+      setRepostsRefreshing(false);
+    }
+  }, []);
+
   const loadConversations = useCallback(async () => {
     try {
       setConvError('');
@@ -169,9 +189,11 @@ export default function SocialScreen() {
 
   useFocusEffect(useCallback(() => {
     loadPosts();
+    setRepostsLoading(true);
+    loadReposts();
     setConvLoading(true);
     loadConversations();
-  }, [loadPosts, loadConversations]));
+  }, [loadPosts, loadReposts, loadConversations]));
 
   const handleLike = async (postId) => {
     try {
@@ -202,6 +224,16 @@ export default function SocialScreen() {
             />
             <Text style={[styles.segmentText, tab === 'friends' && styles.segmentTextActive]}>
               フォロー中
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, tab === 'reposts' && styles.segmentActive]}
+            onPress={() => setTab('reposts')}
+          >
+            <Text style={{ marginRight: 4, fontSize: 14 }}>↩️</Text>
+            <Text style={[styles.segmentText, tab === 'reposts' && styles.segmentTextActive]}>
+              リポスト
             </Text>
           </TouchableOpacity>
 
@@ -265,6 +297,48 @@ export default function SocialScreen() {
               />
             }
             contentContainerStyle={posts.length === 0 ? { flex: 1 } : { padding: 16 }}
+          />
+        )
+      )}
+
+      {/* リポストタブ */}
+      {tab === 'reposts' && (
+        repostsLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
+        ) : repostsError ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{repostsError}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => { setRepostsLoading(true); loadReposts(); }}>
+              <Text style={styles.retryText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={reposts}
+            keyExtractor={item => String(item.id)}
+            renderItem={({ item }) => (
+              <RepostCard
+                repost={item}
+                onReadPress={(seriesId) => navigation.navigate('SeriesDetail', { seriesId })}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.emptyIcon}>↩️</Text>
+                <Text style={styles.emptyTitle}>リポストがありません</Text>
+                <Text style={styles.emptySubtext}>フォロー中のユーザーがリポストすると表示されます</Text>
+              </View>
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={repostsRefreshing}
+                onRefresh={() => { setRepostsRefreshing(true); loadReposts(); }}
+                tintColor={Colors.primary}
+              />
+            }
+            contentContainerStyle={reposts.length === 0 ? { flex: 1 } : { paddingVertical: 8 }}
           />
         )
       )}

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
@@ -11,10 +10,12 @@ import {
   TouchableWithoutFeedback,
   Linking,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { feedAPI, postAPI, bookmarkAPI, adAPI } from '../api/client';
+import { feedAPI, postAPI, bookmarkAPI, adAPI, repostAPI } from '../api/client';
+import RepostModal from '../components/repost/RepostModal';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
 
@@ -31,6 +32,7 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
   const [likeCount, setLikeCount] = useState(post.like_count || 0);
   const [isBookmarked, setIsBookmarked] = useState(post.is_bookmarked || false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [repostModalVisible, setRepostModalVisible] = useState(false);
 
   // ダブルタップ検出
   const lastTap = useRef(null);
@@ -153,7 +155,7 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
                 <Image
                   source={{ uri: item.image_url || item }}
                   style={{ width: SCREEN_WIDTH, height: ITEM_HEIGHT }}
-                  resizeMode="contain"
+                  contentFit="contain"
                 />
               </View>
             )}
@@ -226,6 +228,17 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
               color={isBookmarked ? Colors.accent : '#FFFFFF'}
             />
           </TouchableOpacity>
+
+          {/* リポスト（シリーズ作品のみ） */}
+          {post.series_id && (
+            <TouchableOpacity
+              style={styles.sideBtn}
+              onPress={() => setRepostModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 26, lineHeight: 32 }}>↩️</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ===== 左下 作者・タイトル情報 ===== */}
@@ -288,6 +301,20 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
           </View>
         )}
       </View>
+
+      {/* リポストモーダル */}
+      {post.series_id && (
+        <RepostModal
+          visible={repostModalVisible}
+          onClose={() => setRepostModalVisible(false)}
+          repostType="work"
+          manga={{
+            id: String(post.series_id),
+            title: post.series_title || post.title,
+            cover_url: post.thumbnail_url || images[0]?.image_url || '',
+          }}
+        />
+      )}
     </TouchableWithoutFeedback>
   );
 });
@@ -305,7 +332,7 @@ const AdItem = memo(function AdItem({ ad, itemHeight }) {
       onPress={() => ad.target_url && Linking.openURL(ad.target_url).catch(() => {})}
     >
       {ad.image_url ? (
-        <Image source={{ uri: ad.image_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image source={{ uri: ad.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.card }]} />
       )}
@@ -336,6 +363,10 @@ export default function HomeScreen({ navigation }) {
   const [ad, setAd] = useState(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const offsetRef = useRef(0);
+  const FEED_LIMIT = 10;
 
   useEffect(() => {
     loadPosts();
@@ -345,11 +376,33 @@ export default function HomeScreen({ navigation }) {
   const loadPosts = async () => {
     try {
       setError('');
-      const response = await feedAPI.getFeed();
-      setPosts(response.posts || []);
+      offsetRef.current = 0;
+      const response = await feedAPI.getFeed({ limit: FEED_LIMIT, offset: 0 });
+      const newPosts = response.posts || [];
+      setPosts(newPosts);
+      setHasMore(newPosts.length === FEED_LIMIT);
+      offsetRef.current = newPosts.length;
     } catch (e) {
       console.error('Load posts error:', e);
       setError(t('home.loadError'));
+    }
+  };
+
+  const loadMorePosts = async () => {
+    if (loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const response = await feedAPI.getFeed({ limit: FEED_LIMIT, offset: offsetRef.current });
+      const newPosts = response.posts || [];
+      if (newPosts.length > 0) {
+        setPosts(prev => [...prev, ...newPosts]);
+        offsetRef.current += newPosts.length;
+      }
+      setHasMore(newPosts.length === FEED_LIMIT);
+    } catch (e) {
+      console.error('Load more posts error:', e);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -430,11 +483,12 @@ export default function HomeScreen({ navigation }) {
         // パフォーマンス設定
         initialNumToRender={2}
         maxToRenderPerBatch={3}
-        windowSize={5}          // 前後2投稿をプリロード
+        windowSize={5}
         removeClippedSubviews
-        // プルリフレッシュ
         onRefresh={handleRefresh}
         refreshing={refreshing}
+        onEndReached={loadMorePosts}
+        onEndReachedThreshold={0.5}
       />
       {/* 検索ボタン（フローティング） */}
       <TouchableOpacity

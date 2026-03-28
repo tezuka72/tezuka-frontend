@@ -16,6 +16,7 @@ export default function EditProfileScreen({ navigation }) {
   const [displayName, setDisplayName] = useState(user?.display_name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [avatarUri, setAvatarUri] = useState(null); // 新しく選んだ画像
+  const [avatarFile, setAvatarFile] = useState(null); // Webのみ: File オブジェクト
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -35,6 +36,7 @@ export default function EditProfileScreen({ navigation }) {
     });
     if (!result.canceled && result.assets[0]) {
       setAvatarUri(result.assets[0].uri);
+      setAvatarFile(result.assets[0].file || null); // Webのみ存在する File オブジェクト
     }
   };
 
@@ -49,7 +51,7 @@ export default function EditProfileScreen({ navigation }) {
       let newAvatarUrl = user?.avatar_url;
       if (avatarUri) {
         setUploadingAvatar(true);
-        const { avatar_url } = await userAPI.uploadAvatar(avatarUri);
+        const { avatar_url } = await userAPI.uploadAvatar(avatarUri, avatarFile);
         newAvatarUrl = avatar_url;
         setUploadingAvatar(false);
       }

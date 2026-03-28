@@ -3,10 +3,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 // ネイティブ開発時のみlocalhost、それ以外（Web含む）は本番URLを使用
-const PROD_API_URL = 'https://tezuka-backend-2.onrender.com/api/v1';
+const PROD_API_URL = 'https://api.loremanga.com/api/v1';
 const API_BASE_URL = (__DEV__ && Platform.OS !== 'web')
   ? 'http://localhost:3000/api/v1'
   : PROD_API_URL;
+
+// トークンをメモリにキャッシュ（AsyncStorage読み込みを毎回省略）
+let _cachedToken = null;
+export const setCachedToken = (token) => { _cachedToken = token; };
+export const clearCachedToken = () => { _cachedToken = null; };
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -19,8 +24,9 @@ const api = axios.create({
 // トークンをリクエストに自動付与するインターセプター
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('authToken');
+    const token = _cachedToken ?? await AsyncStorage.getItem('authToken');
     if (token) {
+      if (!_cachedToken) _cachedToken = token;
       config.headers.Authorization = `Bearer ${token}`;
     }
     // FormData の場合は Content-Type を削除（ブラウザが自動設定）
@@ -95,13 +101,26 @@ export const userAPI = {
     const response = await api.put('/users/profile', data);
     return response.data; // { message, user }
   },
-  uploadAvatar: async (imageUri) => {
+  uploadAvatar: async (imageUri, imageFile = null) => {
     const token = await AsyncStorage.getItem('authToken');
     const formData = new FormData();
-    const filename = imageUri.split('/').pop();
-    const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
-    const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
-    formData.append('avatar', { uri: imageUri, name: filename, type: mimeType });
+    if (Platform.OS === 'web') {
+      if (imageFile) {
+        // expo-image-picker が返す File オブジェクト（Web専用）
+        formData.append('avatar', imageFile);
+      } else {
+        // blob: または data: URL からBlobを取得
+        const blobRes = await fetch(imageUri);
+        const blob = await blobRes.blob();
+        formData.append('avatar', blob, 'avatar.jpg');
+      }
+    } else {
+      // React Native専用: URIオブジェクト形式
+      const filename = imageUri.split('/').pop();
+      const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+      formData.append('avatar', { uri: imageUri, name: filename, type: mimeType });
+    }
     const res = await fetch(`${API_BASE_URL}/users/profile/avatar`, {
       method: 'PUT',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -191,8 +210,8 @@ export const postAPI = {
 };
 
 export const feedAPI = {
-  getFeed: async () => {
-    const response = await api.get('/feed');
+  getFeed: async ({ limit = 10, offset = 0 } = {}) => {
+    const response = await api.get('/feed', { params: { limit, offset } });
     return response.data;
   },
   getFollowingFeed: async () => {
@@ -306,9 +325,12 @@ export const adAPI = {
   },
 };
 
-// Render無料プランのスリープ対策: バックグラウンドでサーバーを起こす（awaitしない）
+// サーバーのコールドスタート対策: バックグラウンドでサーバーを起こす（awaitしない）
+// 起動時に1回 + 5分ごとに定期実行してVercelサーバーレスのコールドスタートを防ぐ
 export const wakeupServer = () => {
-  axios.get(API_BASE_URL.replace('/api/v1', '') + '/health', { timeout: 60000 }).catch(() => {});
+  const ping = () => axios.get(API_BASE_URL.replace('/api/v1', '') + '/health', { timeout: 10000 }).catch(() => {});
+  ping();
+  setInterval(ping, 5 * 60 * 1000);
 };
 
 // EN（応援エネルギー）残高・応援送信
@@ -401,6 +423,13 @@ export const libraryAPI = {
   getLikes: async (cursor = null) => {
     const params = cursor ? { cursor } : {};
     const response = await api.get('/me/library/likes', { params });
+    return response.data;
+  },
+
+  // 本棚: リポスト一覧
+  getReposts: async (cursor = null) => {
+    const params = cursor ? { cursor } : {};
+    const response = await api.get('/me/library/reposts', { params });
     return response.data;
   },
 
@@ -598,6 +627,25 @@ export const boardAPI = {
   },
   delete: async (seriesId, postId) => {
     const response = await api.delete(`/board/${seriesId}/${postId}`);
+    return response.data;
+  },
+};
+
+export const repostAPI = {
+  create: async (data) => {
+    const response = await api.post('/reposts', data);
+    return response.data;
+  },
+  remove: async (id) => {
+    const response = await api.delete(`/reposts/${id}`);
+    return response.data;
+  },
+  list: async ({ cursor, limit = 20 } = {}) => {
+    const response = await api.get('/reposts', { params: { cursor, limit } });
+    return response.data;
+  },
+  getTimeline: async ({ cursor, limit = 20, filter = 'all' } = {}) => {
+    const response = await api.get('/timeline/reposts', { params: { cursor, limit, filter } });
     return response.data;
   },
 };

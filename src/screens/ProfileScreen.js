@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, bookmarkAPI, libraryAPI, postAPI } from '../api/client';
+import { userAPI, bookmarkAPI, libraryAPI, postAPI, repostAPI } from '../api/client';
+import RepostCard from '../components/repost/RepostCard';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Colors } from '../theme/colors';
@@ -67,10 +68,13 @@ function LibraryTab({ navigation }) {
   const [subTab, setSubTab] = useState('follows');
   const [follows, setFollows] = useState([]);
   const [likes, setLikes] = useState([]);
+  const [reposts, setReposts] = useState([]);
   const [followsCursor, setFollowsCursor] = useState(null);
   const [likesCursor, setLikesCursor] = useState(null);
+  const [repostsCursor, setRepostsCursor] = useState(null);
   const [followsMore, setFollowsMore] = useState(true);
   const [likesMore, setLikesMore] = useState(true);
+  const [repostsMore, setRepostsMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadedTabs, setLoadedTabs] = useState([]);
 
@@ -106,12 +110,29 @@ function LibraryTab({ navigation }) {
     }
   }, [loading]);
 
+  const loadReposts = useCallback(async (cursor = null, reset = false) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await libraryAPI.getReposts(cursor);
+      const newItems = res.items || [];
+      setReposts(prev => reset ? newItems : [...prev, ...newItems]);
+      setRepostsCursor(res.next_cursor ?? null);
+      setRepostsMore(res.has_more ?? false);
+    } catch (e) {
+      console.error('Library reposts error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading]);
+
   // 初回ロード（タブごとに1回だけ）
   useEffect(() => {
     if (!loadedTabs.includes(subTab)) {
       setLoadedTabs(prev => [...prev, subTab]);
       if (subTab === 'follows') loadFollows(null, true);
-      else loadLikes(null, true);
+      else if (subTab === 'likes') loadLikes(null, true);
+      else loadReposts(null, true);
     }
   }, [subTab]);
 
@@ -123,14 +144,26 @@ function LibraryTab({ navigation }) {
     navigation?.navigate('SeriesDetail', { seriesId: series.series_id });
   };
 
-  const currentList   = subTab === 'follows' ? follows : likes;
-  const currentMore   = subTab === 'follows' ? followsMore  : likesMore;
-  const currentCursor = subTab === 'follows' ? followsCursor : likesCursor;
+  const currentList   = subTab === 'follows' ? follows : subTab === 'likes' ? likes : reposts;
+  const currentMore   = subTab === 'follows' ? followsMore : subTab === 'likes' ? likesMore : repostsMore;
+  const currentCursor = subTab === 'follows' ? followsCursor : subTab === 'likes' ? likesCursor : repostsCursor;
   const loadMore = () => {
     if (!currentMore) return;
     if (subTab === 'follows') loadFollows(currentCursor);
-    else loadLikes(currentCursor);
+    else if (subTab === 'likes') loadLikes(currentCursor);
+    else loadReposts(currentCursor);
   };
+
+  const emptyText = subTab === 'follows'
+    ? t('library.empty.follows')
+    : subTab === 'likes'
+    ? t('library.empty.likes')
+    : 'まだリポストした作品がありません';
+  const emptyHint = subTab === 'follows'
+    ? t('library.empty.follows.hint')
+    : subTab === 'likes'
+    ? t('library.empty.likes.hint')
+    : 'フィードや作品ページの ↩️ ボタンでリポストできます';
 
   return (
     <View style={{ flex: 1 }}>
@@ -152,12 +185,20 @@ function LibraryTab({ navigation }) {
             {t('library.likes')}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.subTab, subTab === 'reposts' && styles.subTabActive]}
+          onPress={() => setSubTab('reposts')}
+        >
+          <Text style={[styles.subTabText, subTab === 'reposts' && styles.subTabTextActive]}>
+            リポスト
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* リスト */}
       <FlatList
         data={currentList}
-        keyExtractor={item => item.series_id}
+        keyExtractor={item => String(item.series_id)}
         renderItem={({ item }) => (
           <LibraryBookCard
             series={item}
@@ -174,16 +215,8 @@ function LibraryTab({ navigation }) {
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📚</Text>
-              <Text style={styles.emptyText}>
-                {subTab === 'follows'
-                  ? t('library.empty.follows')
-                  : t('library.empty.likes')}
-              </Text>
-              <Text style={styles.emptyHint}>
-                {subTab === 'follows'
-                  ? t('library.empty.follows.hint')
-                  : t('library.empty.likes.hint')}
-              </Text>
+              <Text style={styles.emptyText}>{emptyText}</Text>
+              <Text style={styles.emptyHint}>{emptyHint}</Text>
             </View>
           )
         }
@@ -208,6 +241,9 @@ export default function ProfileScreen({ route, navigation }) {
   const [activeTab, setActiveTab] = useState('posts');
   const [bookmarks, setBookmarks] = useState([]);
   const [bookmarksLoaded, setBookmarksLoaded] = useState(false);
+  const [reposts, setReposts] = useState([]);
+  const [repostsLoaded, setRepostsLoaded] = useState(false);
+  const [repostsLoading, setRepostsLoading] = useState(false);
 
   const isOwnProfile = currentUser?.username === username;
   const [isFollowing, setIsFollowing] = useState(false);
@@ -271,9 +307,24 @@ export default function ProfileScreen({ route, navigation }) {
     }
   };
 
+  const loadReposts = async () => {
+    if (repostsLoaded) return;
+    setRepostsLoading(true);
+    try {
+      const response = await repostAPI.list({ limit: 50 });
+      setReposts(response.reposts || []);
+      setRepostsLoaded(true);
+    } catch (e) {
+      console.error('Load reposts error:', e);
+    } finally {
+      setRepostsLoading(false);
+    }
+  };
+
   const handleTabSwitch = (tab) => {
     setActiveTab(tab);
     if (tab === 'favorites' && !bookmarksLoaded) loadBookmarks();
+    if (tab === 'reposts' && !repostsLoaded) loadReposts();
   };
 
   const handlePostPress = (post) => {
@@ -390,6 +441,15 @@ export default function ProfileScreen({ route, navigation }) {
         {isOwnProfile && (
           <>
             <TouchableOpacity
+              style={[styles.tab, activeTab === 'reposts' && styles.tabActive]}
+              onPress={() => handleTabSwitch('reposts')}
+            >
+              <Text style={[styles.tabText, activeTab === 'reposts' && styles.tabTextActive]}>
+                ↩️ リポスト
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.tab, activeTab === 'library' && styles.tabActive]}
               onPress={() => handleTabSwitch('library')}
             >
@@ -433,6 +493,31 @@ export default function ProfileScreen({ route, navigation }) {
             </View>
           )}
         </ScrollView>
+      )}
+
+      {/* リポスト（自分のみ） */}
+      {activeTab === 'reposts' && isOwnProfile && (
+        repostsLoading ? (
+          <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
+        ) : reposts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>↩️</Text>
+            <Text style={styles.emptyText}>リポストがありません</Text>
+            <Text style={styles.emptyHint}>投稿詳細画面の ↩️ ボタンからリポストできます</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={reposts}
+            keyExtractor={item => String(item.id)}
+            renderItem={({ item }) => (
+              <RepostCard
+                repost={item}
+                onReadPress={(seriesId) => navigation?.navigate('SeriesDetail', { seriesId })}
+              />
+            )}
+            contentContainerStyle={{ paddingVertical: 8 }}
+          />
+        )
       )}
 
       {/* 本棚（自分のみ） */}

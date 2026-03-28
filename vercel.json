@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/assets/node_modules/:path*",
+      "destination": "/vendor/:path*"
+    }
+  ]
+}

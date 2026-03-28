@@ -94,7 +94,7 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
-  const { conversation } = route.params;
+  const { conversation } = route.params || {};
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);

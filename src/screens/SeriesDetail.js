@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import RepostModal from '../components/repost/RepostModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { seriesAPI, postAPI, footprintAPI, libraryAPI } from '../api/client';
@@ -93,6 +94,7 @@ export default function SeriesDetail({ route, navigation }) {
 
   const [isFollowing, setIsFollowing] = useState(false);
   const [isSeriesLiked, setIsSeriesLiked] = useState(false);
+  const [repostModalVisible, setRepostModalVisible] = useState(false);
 
   const handleFollow = async () => {
     try {
@@ -375,6 +377,14 @@ export default function SeriesDetail({ route, navigation }) {
                     >
                       <Ionicons name="share-outline" size={20} color={Colors.foreground} />
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.iconBtn, { borderColor: '#E94B7A' }]}
+                      onPress={() => setRepostModalVisible(true)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={{ fontSize: 16 }}>↩️</Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* 掲示板ボタン */}
@@ -462,6 +472,19 @@ export default function SeriesDetail({ route, navigation }) {
         onClose={handleSupportClose}
         seriesId={seriesId}
       />
+
+      {series && (
+        <RepostModal
+          visible={repostModalVisible}
+          onClose={() => setRepostModalVisible(false)}
+          repostType="work"
+          manga={{
+            id: series.id,
+            title: series.title,
+            cover_url: series.cover_image_url,
+          }}
+        />
+      )}
 
       <ContributionReceipt
         visible={receipt.visible}

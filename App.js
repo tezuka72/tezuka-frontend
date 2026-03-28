@@ -13,6 +13,9 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { StripeProvider } from './src/utils/stripe';
 import { notificationAPI } from './src/api/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 // Screens
 import LandingScreen from './src/screens/LandingScreen';
@@ -112,7 +115,12 @@ function MainTabs() {
         tabBarShowLabel: true,
         tabBarActiveTintColor: '#FFFFFF',
         tabBarInactiveTintColor: '#888888',
-        tabBarStyle: [tabStyles.tabBar, { position: 'absolute', height: 60 + bottomInset, paddingBottom: bottomInset + 4 }],
+        tabBarStyle: [
+          tabStyles.tabBar,
+          Platform.OS === 'web'
+            ? { position: 'fixed', bottom: 0, left: 0, right: 0, height: 60, paddingBottom: 4 }
+            : { position: 'absolute', height: 60 + bottomInset, paddingBottom: bottomInset + 4 },
+        ],
         tabBarLabelStyle: tabStyles.tabLabel,
         tabBarItemStyle: { flex: 1 },
       }}
@@ -339,17 +347,19 @@ export default function App() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <LanguageProvider>
-          <StripeProvider publishableKey={stripeKey}>
-            <NavigationContainer>
-              <AppNavigator />
-            </NavigationContainer>
-          </StripeProvider>
-        </LanguageProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <LanguageProvider>
+            <StripeProvider publishableKey={stripeKey}>
+              <NavigationContainer>
+                <AppNavigator />
+              </NavigationContainer>
+            </StripeProvider>
+          </LanguageProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 }
 

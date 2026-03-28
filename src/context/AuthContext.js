@@ -1,6 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authAPI, wakeupServer } from '../api/client';
+import { authAPI, wakeupServer, setCachedToken, clearCachedToken } from '../api/client';
 
 const AuthContext = createContext();
 
@@ -26,10 +26,13 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     wakeupServer();
     try {
-      const token = await AsyncStorage.getItem('authToken');
-      const userData = await AsyncStorage.getItem('user');
+      const [token, userData] = await Promise.all([
+        AsyncStorage.getItem('authToken'),
+        AsyncStorage.getItem('user'),
+      ]);
 
       if (token && userData) {
+        setCachedToken(token);
         setAuthToken(token);
         setUser(JSON.parse(userData));
         
@@ -66,6 +69,7 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('authToken', response.token);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
 
+      setCachedToken(response.token);
       setAuthToken(response.token);
       setUser(response.user);
       setIsGuest(false);
@@ -94,6 +98,7 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('authToken', response.token);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
 
+      setCachedToken(response.token);
       setAuthToken(response.token);
       setUser(response.user);
       setIsGuest(false);
@@ -116,6 +121,7 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('authToken', response.token);
       await AsyncStorage.setItem('user', JSON.stringify(response.user));
 
+      setCachedToken(response.token);
       setAuthToken(response.token);
       setUser(response.user);
       setIsGuest(false);
@@ -134,6 +140,7 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('user');
 
+      clearCachedToken();
       setAuthToken(null);
       setUser(null);
       setIsGuest(false);
