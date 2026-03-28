@@ -52,10 +52,12 @@ const Tab = createBottomTabNavigator();
 function CreateTabButton({ onPress }) {
   return (
     <TouchableOpacity style={tabStyles.createButtonWrap} onPress={onPress} activeOpacity={0.85}>
-      <View style={tabStyles.createButtonShadowLeft} />
-      <View style={tabStyles.createButtonShadowRight} />
-      <View style={tabStyles.createButtonInner}>
-        <Text style={tabStyles.createButtonText}>+</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={tabStyles.createButtonShadowLeft} />
+        <View style={tabStyles.createButtonShadowRight} />
+        <View style={tabStyles.createButtonInner}>
+          <Text style={tabStyles.createButtonText}>+</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );

@@ -131,6 +131,7 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
   const bottomPad = TAB_BAR_HEIGHT + insets.bottom + 16;
 
   return (
+    <View style={{ height: ITEM_HEIGHT }}>
     <TouchableWithoutFeedback onPress={handleTap}>
       <View style={[styles.postItem, { height: ITEM_HEIGHT }]}>
 
@@ -299,20 +300,21 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
           </View>
         )}
       </View>
-
-      {/* リポストモーダル */}
-      <RepostModal
-        visible={repostModalVisible}
-        onClose={() => setRepostModalVisible(false)}
-        repostType="work"
-        manga={{
-          id: post.series_id ? String(post.series_id) : '',
-          title: post.series_title || post.title,
-          cover_url: post.thumbnail_url || images[0]?.image_url || '',
-        }}
-        episodeId={String(post.id)}
-      />
     </TouchableWithoutFeedback>
+
+    {/* リポストモーダル */}
+    <RepostModal
+      visible={repostModalVisible}
+      onClose={() => setRepostModalVisible(false)}
+      repostType="work"
+      manga={{
+        id: post.series_id ? String(post.series_id) : '',
+        title: post.series_title || post.title,
+        cover_url: post.thumbnail_url || images[0]?.image_url || '',
+      }}
+      episodeId={String(post.id)}
+    />
+    </View>
   );
 });
 
