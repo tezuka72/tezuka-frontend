@@ -36,6 +36,8 @@ export default function RepostCard({ repost, onReadPress }: Props) {
   const showSpoilerWarning = (is_spoiler || spoiler_auto) && !viewer_read_status;
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
 
+  if (!actor || !manga) return null;
+
   return (
     <View style={styles.card}>
       {/* ヘッダー: アバター + 「〇〇さんがリポストしました」 */}
