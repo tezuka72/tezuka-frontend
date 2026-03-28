@@ -117,10 +117,12 @@ export default function RepostModal({ visible, onClose, repostType, manga, page,
 
           {/* ネタバレチェックボックス */}
           <TouchableOpacity style={styles.checkRow} onPress={() => setIsSpoiler(!isSpoiler)} activeOpacity={0.7}>
-            <View style={[styles.checkbox, isSpoiler && styles.checkboxChecked]}>
-              {isSpoiler && <Text style={styles.checkmark}>✓</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.checkbox, isSpoiler && styles.checkboxChecked]}>
+                {isSpoiler && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.checkLabel}>ネタバレあり</Text>
             </View>
-            <Text style={styles.checkLabel}>ネタバレあり</Text>
           </TouchableOpacity>
 
           {/* ボタン */}

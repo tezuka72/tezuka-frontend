@@ -339,8 +339,10 @@ export default function App() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(() => {});
 
     return () => {
-      Notifications.removeNotificationSubscription(notifListener.current);
-      Notifications.removeNotificationSubscription(responseListener.current);
+      try {
+        notifListener.current?.remove?.();
+        responseListener.current?.remove?.();
+      } catch (e) {}
     };
   }, [fontsLoaded]);
 
