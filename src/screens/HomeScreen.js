@@ -132,6 +132,15 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
 
   return (
     <View style={{ height: ITEM_HEIGHT }}>
+    {/* リポストバナー */}
+    {post.feed_type === 'repost' && (
+      <View style={styles.repostBanner}>
+        <Ionicons name="repeat" size={13} color="#aaa" />
+        <Text style={styles.repostBannerText}>
+          {post.reposter_name || post.reposter_username}さんがリポスト
+        </Text>
+      </View>
+    )}
     <TouchableWithoutFeedback onPress={handleTap}>
       <View style={[styles.postItem, { height: ITEM_HEIGHT }]}>
 
@@ -561,6 +570,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     alignItems: 'center',
+  },
+  repostBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  repostBannerText: {
+    color: '#aaa',
+    fontSize: 12,
   },
   sideBtn: {
     alignItems: 'center',
