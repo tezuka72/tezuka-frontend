@@ -166,6 +166,9 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
                   source={{ uri: item.image_url || item }}
                   style={{ width: SCREEN_WIDTH, height: ITEM_HEIGHT }}
                   contentFit="contain"
+                  transition={150}
+                  placeholder={{ color: '#111' }}
+                  cachePolicy="memory-disk"
                 />
               </View>
             )}
@@ -390,6 +393,13 @@ export default function HomeScreen({ navigation }) {
       setPosts(newPosts);
       setHasMore(newPosts.length === FEED_LIMIT);
       offsetRef.current = newPosts.length;
+      // 最初の5件の画像を即時プリフェッチ
+      newPosts.slice(0, 5).forEach((p) => {
+        (p.images || []).forEach((img) => {
+          const url = img?.image_url || img;
+          if (url) Image.prefetch(url);
+        });
+      });
     } catch (e) {
       console.error('Load posts error:', e);
       setError(t('home.loadError'));
@@ -450,9 +460,9 @@ export default function HomeScreen({ navigation }) {
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 });
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     const visibleIndex = viewableItems[0]?.index ?? 0;
-    // 次の1〜2投稿の画像をプリフェッチ
-    [visibleIndex + 1, visibleIndex + 2].forEach((nextIdx) => {
-      const nextItem = feedItemsRef.current[nextIdx];
+    // 次の3〜5投稿の画像をプリフェッチ
+    [1, 2, 3, 4, 5].forEach((offset) => {
+      const nextItem = feedItemsRef.current[visibleIndex + offset];
       if (!nextItem || nextItem._isAd) return;
       (nextItem.images || []).forEach((img) => {
         const url = img?.image_url || img;
