@@ -2,8 +2,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/assets/node_modules/:path*",
-      "destination": "/vendor/:path*"
+      "source": "/((?!_expo|assets|favicon\\.ico).*)",
+      "destination": "/index.html"
     }
   ]
 }
