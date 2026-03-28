@@ -36,9 +36,10 @@ interface Props {
   repostType: 'work' | 'page';
   manga: Manga;
   page?: Page;
+  episodeId?: string;
 }
 
-export default function RepostModal({ visible, onClose, repostType, manga, page }: Props) {
+export default function RepostModal({ visible, onClose, repostType, manga, page, episodeId }: Props) {
   const [comment, setComment] = useState('');
   const [isSpoiler, setIsSpoiler] = useState(false);
   const { mutate, isPending } = useCreateRepost();
@@ -47,9 +48,9 @@ export default function RepostModal({ visible, onClose, repostType, manga, page 
     mutate(
       {
         repost_type: repostType,
-        manga_id: manga.id,
+        manga_id: manga.id || undefined,
         page_id: repostType === 'page' ? page?.id : undefined,
-        episode_id: page?.episode_id,
+        episode_id: page?.episode_id || episodeId,
         comment: comment.trim() || undefined,
         is_spoiler: isSpoiler,
         emotion_tags: [],

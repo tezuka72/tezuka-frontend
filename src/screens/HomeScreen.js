@@ -229,16 +229,14 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
             />
           </TouchableOpacity>
 
-          {/* リポスト（シリーズ作品のみ） */}
-          {post.series_id && (
-            <TouchableOpacity
-              style={styles.sideBtn}
-              onPress={() => setRepostModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontSize: 26, lineHeight: 32 }}>↩️</Text>
-            </TouchableOpacity>
-          )}
+          {/* リポスト */}
+          <TouchableOpacity
+            style={styles.sideBtn}
+            onPress={() => setRepostModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 26, lineHeight: 32 }}>↩️</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ===== 左下 作者・タイトル情報 ===== */}
@@ -303,18 +301,17 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
       </View>
 
       {/* リポストモーダル */}
-      {post.series_id && (
-        <RepostModal
-          visible={repostModalVisible}
-          onClose={() => setRepostModalVisible(false)}
-          repostType="work"
-          manga={{
-            id: String(post.series_id),
-            title: post.series_title || post.title,
-            cover_url: post.thumbnail_url || images[0]?.image_url || '',
-          }}
-        />
-      )}
+      <RepostModal
+        visible={repostModalVisible}
+        onClose={() => setRepostModalVisible(false)}
+        repostType="work"
+        manga={{
+          id: post.series_id ? String(post.series_id) : '',
+          title: post.series_title || post.title,
+          cover_url: post.thumbnail_url || images[0]?.image_url || '',
+        }}
+        episodeId={String(post.id)}
+      />
     </TouchableWithoutFeedback>
   );
 });
