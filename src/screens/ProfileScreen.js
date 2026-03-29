@@ -311,7 +311,7 @@ export default function ProfileScreen({ route, navigation }) {
   const handleDM = async () => {
     if (!profile) return;
     try {
-      const { conversation_id } = await messageAPI.createConversation([profile.id], 'direct');
+      const { conversation_id } = await messageAPI.createConversation([profile.id], 'dm');
       navigation?.navigate('Chat', {
         conversation: {
           id: conversation_id,
