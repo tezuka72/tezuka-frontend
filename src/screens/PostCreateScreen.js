@@ -234,7 +234,7 @@ export default function PostCreateScreen({ navigation }) {
   // Step 2: サムネ選択
   if (step === 2) {
     return (
-      <View style={[styles.stepContainer, { paddingTop: insets.top }]}>
+      <View style={[styles.stepContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.stepHeader}>
           <TouchableOpacity onPress={() => setStep(1)}>
             <Text style={styles.backText}>＜ 戻る</Text>
@@ -409,7 +409,7 @@ export default function PostCreateScreen({ navigation }) {
         </View>
       </View>
     </Modal>
-    <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top }]}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.content}>
         <View style={styles.stepHeader}>
           <TouchableOpacity onPress={() => setStep(2)}>
