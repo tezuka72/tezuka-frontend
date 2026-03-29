@@ -106,11 +106,11 @@ export default function AnalyticsScreen({ route, navigation }) {
     );
   }
 
-  const fp = data?.footprint_summary || {};
-  const eps = data?.episodes_stats || [];
+  const fp = data?.footprints || {};
+  const eps = data?.episodes || [];
   const viewTrend = data?.view_trend || [];
   const fanTrend = data?.fan_trend || [];
-  const giftEarnings = data?.gift_earnings || { total_gift_value: 0, gift_count: 0 };
+  const giftEarnings = data?.earnings || { total_gift_earnings: 0, gift_count: 0 };
 
   return (
     <ScrollView
@@ -138,23 +138,29 @@ export default function AnalyticsScreen({ route, navigation }) {
       {/* 足跡サマリー */}
       <Text style={styles.sectionTitle}>足跡サマリー</Text>
       <View style={styles.statRow}>
-        <StatCard label="いいね" value={fp.liked_count} color={Colors.rose} />
-        <StatCard label="読了" value={fp.read_completed_count} color={Colors.emerald} />
-        <StatCard label="シェア" value={fp.shared_count} color={Colors.cyan} />
-        <StatCard label="応援" value={fp.supported_count} color={Colors.accent} />
+        <StatCard label="いいね" value={fp.total_liked} color={Colors.rose} />
+        <StatCard label="読了" value={fp.total_read_completed} color={Colors.emerald} />
+        <StatCard label="外部シェア" value={fp.total_shared} color={Colors.cyan} />
+        <StatCard label="応援" value={fp.total_supported} color={Colors.accent} />
+      </View>
+      <View style={styles.statRow}>
+        <StatCard label="リポスト" value={fp.total_reposts} color={Colors.primary} />
+        {Number(fp.early_supporters) > 0 && (
+          <StatCard label="初期応援者" value={fp.early_supporters} color={Colors.violet} sub="✨ アーリーサポーター" />
+        )}
       </View>
 
       {/* ギフト収益 */}
       <Text style={styles.sectionTitle}>ギフト収益</Text>
       <View style={styles.statRow}>
-        <StatCard label="累計ギフト額" value={`¥${Number(giftEarnings.total_gift_value || 0).toLocaleString()}`} color={Colors.primary} />
+        <StatCard label="累計ギフト額" value={`¥${Number(giftEarnings.total_gift_earnings || 0).toLocaleString()}`} color={Colors.primary} />
         <StatCard label="ギフト数" value={giftEarnings.gift_count} color={Colors.violet} />
       </View>
 
       {/* 7日間閲覧トレンド */}
       {viewTrend.length > 0 && (
         <BarChart
-          data={viewTrend.map(d => ({ count: d.view_count, day: (d.view_date || '').slice(5) }))}
+          data={viewTrend.map(d => ({ count: d.views, day: (d.date || '').slice(5) }))}
           label="過去7日間の閲覧数"
         />
       )}
@@ -162,7 +168,7 @@ export default function AnalyticsScreen({ route, navigation }) {
       {/* 30日間ファントレンド */}
       {fanTrend.length > 0 && (
         <BarChart
-          data={fanTrend.map(d => ({ count: d.new_fans, day: (d.fan_date || '').slice(5) }))}
+          data={fanTrend.map(d => ({ count: d.new_fans, day: (d.date || '').slice(5) }))}
           label="過去30日間の新規ファン"
         />
       )}
