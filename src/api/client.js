@@ -230,6 +230,10 @@ export const feedAPI = {
     const response = await api.get('/feed/following');
     return response.data;
   },
+  getTrending: async ({ limit = 30, timeframe = '7d' } = {}) => {
+    const response = await api.get('/feed/trending', { params: { limit, timeframe } });
+    return response.data; // { posts }
+  },
   search: async (q, limit = 20) => {
     const response = await api.get('/feed/search', { params: { q, limit } });
     return response.data; // { posts, query }
