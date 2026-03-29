@@ -6,10 +6,11 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import { messageAPI } from '../api/client';
+import { messageAPI, userAPI } from '../api/client';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 const POLL_INTERVAL = 5000;
@@ -58,7 +59,7 @@ function ReactionBar({ reactions, onToggle, myId }) {
   );
 }
 
-function MessageItem({ msg, isMine, onLongPress, onReactionToggle }) {
+function MessageItem({ msg, isMine, onLongPress, onReactionToggle, readAvatars }) {
   return (
     <Pressable onLongPress={() => onLongPress(msg)} delayLongPress={400}>
       <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
@@ -77,12 +78,27 @@ function MessageItem({ msg, isMine, onLongPress, onReactionToggle }) {
             </View>
           )}
           <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
-            <MentionText text={msg.content} style={[styles.bubbleText, isMine && styles.bubbleTextMine]} />
+            {/* 画像 */}
+            {msg.image_url && (
+              <Image source={{ uri: msg.image_url }} style={styles.msgImage} resizeMode="cover" />
+            )}
+            {/* テキスト */}
+            {msg.content ? (
+              <MentionText text={msg.content} style={[styles.bubbleText, isMine && styles.bubbleTextMine]} />
+            ) : null}
             <Text style={[styles.msgTime, isMine && styles.msgTimeMine]}>
               {new Date(msg.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
           <ReactionBar reactions={msg.reactions} onToggle={(emoji, reacted) => onReactionToggle(msg.id, emoji, reacted)} />
+          {/* 既読アバター（自分のメッセージのみ、最後に読んだメッセージに表示） */}
+          {isMine && readAvatars && readAvatars.length > 0 && (
+            <View style={styles.readAvatarRow}>
+              {readAvatars.map(r => (
+                <Avatar key={r.user_id} uri={r.avatar_url} name={r.display_name || r.username} size={16} />
+              ))}
+            </View>
+          )}
         </View>
       </View>
     </Pressable>
@@ -102,6 +118,7 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState(null); // { id, content, username }
   const [actionMsg, setActionMsg] = useState(null); // 長押しメニュー対象
+  const [readers, setReaders] = useState([]); // [{user_id, last_read_at, username, display_name, avatar_url}]
   const flatListRef = useRef(null);
   const pollingRef = useRef(null);
   const oldestIdRef = useRef(null); // 最も古いメッセージID（前読み込み用）
@@ -148,23 +165,28 @@ export default function ChatScreen() {
     }
   };
 
-  // ポーリング: newestIdRef より新しいメッセージを取得
+  // ポーリング: 新着メッセージ + 既読者を更新
   const pollNewMessages = useCallback(async () => {
     try {
-      const data = await messageAPI.getMessages(conversation.id);
-      const fresh = data.messages || [];
-      if (fresh.length === 0) return;
-      const latestId = fresh[fresh.length - 1].id;
-      if (latestId === newestIdRef.current) return;
-
-      setMessages(prev => {
-        const existingIds = new Set(prev.map(m => m.id));
-        const newOnes = fresh.filter(m => !existingIds.has(m.id));
-        if (newOnes.length === 0) return prev;
-        newestIdRef.current = latestId;
-        return [...prev, ...newOnes];
-      });
-      messageAPI.markRead(conversation.id).catch(() => {});
+      const [msgData, readersData] = await Promise.all([
+        messageAPI.getMessages(conversation.id),
+        messageAPI.getReaders(conversation.id),
+      ]);
+      const fresh = msgData.messages || [];
+      if (fresh.length > 0) {
+        const latestId = fresh[fresh.length - 1].id;
+        if (latestId !== newestIdRef.current) {
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newOnes = fresh.filter(m => !existingIds.has(m.id));
+            if (newOnes.length === 0) return prev;
+            newestIdRef.current = latestId;
+            return [...prev, ...newOnes];
+          });
+          messageAPI.markRead(conversation.id).catch(() => {});
+        }
+      }
+      setReaders(readersData.readers || []);
     } catch {}
   }, [conversation.id]);
 
@@ -255,6 +277,66 @@ export default function ChatScreen() {
     setActionMsg(null);
   };
 
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('権限が必要です', '写真へのアクセスを許可してください');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setSending(true);
+    try {
+      const data = await messageAPI.sendMessageWithImage(
+        conversation.id,
+        asset.uri,
+        asset.file || null,
+        text.trim() || null,
+        replyTo?.id || null
+      );
+      const newMsg = data.message;
+      setMessages(prev => [...prev, newMsg]);
+      newestIdRef.current = newMsg.id;
+      setText('');
+      setReplyTo(null);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch {
+      Alert.alert(t('common.error'), t('chat.sendError'));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!actionMsg) return;
+    const targetId = actionMsg.sender_id;
+    const targetName = actionMsg.sender_display_name || actionMsg.sender_username;
+    setActionMsg(null);
+    Alert.alert(
+      `${targetName}をブロック`,
+      'このユーザーをブロックしますか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'ブロック',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await userAPI.blockUser(targetId);
+              Alert.alert('ブロックしました');
+            } catch {
+              Alert.alert(t('common.error'), 'ブロックに失敗しました');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -270,14 +352,35 @@ export default function ChatScreen() {
           ref={flatListRef}
           data={messages}
           keyExtractor={item => String(item.id)}
-          renderItem={({ item }) => (
-            <MessageItem
-              msg={item}
-              isMine={item.sender_id === user?.id}
-              onLongPress={onLongPress}
-              onReactionToggle={onReactionToggle}
-            />
-          )}
+          renderItem={({ item }) => {
+            // この自分のメッセージが最後に読まれているリーダーのアバターを計算
+            const readAvatars = item.sender_id === user?.id
+              ? readers.filter(r => {
+                  // r.last_read_at がこのメッセージより後、かつ次のメッセージより前（または最後）
+                  if (!r.last_read_at) return false;
+                  const readTime = new Date(r.last_read_at).getTime();
+                  const msgTime = new Date(item.created_at).getTime();
+                  return readTime >= msgTime;
+                }).filter(r => {
+                  // 次の自分のメッセージより後のリーダーは除外（次のメッセージに表示）
+                  const idx = messages.indexOf(item);
+                  const nextMsg = messages.slice(idx + 1).find(m => m.sender_id === user?.id);
+                  if (!nextMsg) return true;
+                  const readTime = new Date(r.last_read_at).getTime();
+                  const nextTime = new Date(nextMsg.created_at).getTime();
+                  return readTime < nextTime;
+                })
+              : [];
+            return (
+              <MessageItem
+                msg={item}
+                isMine={item.sender_id === user?.id}
+                onLongPress={onLongPress}
+                onReactionToggle={onReactionToggle}
+                readAvatars={readAvatars}
+              />
+            );
+          }}
           contentContainerStyle={styles.listContent}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
@@ -303,6 +406,13 @@ export default function ChatScreen() {
 
       {/* 入力エリア */}
       <View style={styles.inputArea}>
+        <TouchableOpacity
+          style={styles.imageBtn}
+          onPress={handlePickImage}
+          disabled={sending}
+        >
+          <Ionicons name="image-outline" size={24} color={sending ? Colors.muted : Colors.foreground} />
+        </TouchableOpacity>
         <TextInput
           style={styles.input}
           placeholder={t('chat.placeholder')}
@@ -347,6 +457,13 @@ export default function ChatScreen() {
               <TouchableOpacity style={styles.actionItem} onPress={handleDeleteMessage}>
                 <Ionicons name="trash-outline" size={20} color={Colors.error} />
                 <Text style={[styles.actionItemText, { color: Colors.error }]}>{t('chat.deleteMessage')}</Text>
+              </TouchableOpacity>
+            )}
+            {/* 他人のメッセージのみブロック可能 */}
+            {actionMsg?.sender_id !== user?.id && (
+              <TouchableOpacity style={styles.actionItem} onPress={handleBlockUser}>
+                <Ionicons name="ban-outline" size={20} color={Colors.error} />
+                <Text style={[styles.actionItemText, { color: Colors.error }]}>ブロック</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={[styles.actionItem, styles.actionCancel]} onPress={() => setActionMsg(null)}>
@@ -438,6 +555,20 @@ const styles = StyleSheet.create({
   replyBannerLabel: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
   replyBannerContent: { fontSize: 13, color: Colors.muted, marginTop: 2 },
 
+  // メッセージ画像
+  msgImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  // 既読アバター行
+  readAvatarRow: {
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: 3,
+    justifyContent: 'flex-end',
+  },
   // 入力エリア
   inputArea: {
     flexDirection: 'row',
@@ -448,6 +579,12 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     backgroundColor: Colors.background,
     gap: 8,
+  },
+  imageBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   input: {
     flex: 1,

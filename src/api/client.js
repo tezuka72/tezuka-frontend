@@ -141,6 +141,18 @@ export const userAPI = {
     const response = await api.delete(`/users/${userId}/follow`);
     return response.data;
   },
+  blockUser: async (userId) => {
+    const response = await api.post(`/users/${userId}/block`);
+    return response.data;
+  },
+  unblockUser: async (userId) => {
+    const response = await api.delete(`/users/${userId}/block`);
+    return response.data;
+  },
+  getBlockedUsers: async () => {
+    const response = await api.get('/users/me/blocked');
+    return response.data;
+  },
 };
 
 export const postAPI = {
@@ -495,6 +507,37 @@ export const messageAPI = {
       reply_to_id: replyToId,
     });
     return response.data;
+  },
+  sendMessageWithImage: async (convId, imageUri, imageFile = null, content = null, replyToId = null) => {
+    const token = await AsyncStorage.getItem('authToken');
+    const formData = new FormData();
+    if (content) formData.append('content', content);
+    if (replyToId) formData.append('reply_to_id', String(replyToId));
+    if (Platform.OS === 'web') {
+      if (imageFile) {
+        formData.append('image', imageFile);
+      } else {
+        const blobRes = await fetch(imageUri);
+        const blob = await blobRes.blob();
+        formData.append('image', blob, 'image.jpg');
+      }
+    } else {
+      const filename = imageUri.split('/').pop();
+      const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+      formData.append('image', { uri: imageUri, name: filename, type: mimeType });
+    }
+    const res = await fetch(`${API_BASE_URL}/messages/conversations/${convId}/messages`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to send image message');
+    return res.json();
+  },
+  getReaders: async (convId) => {
+    const response = await api.get(`/messages/conversations/${convId}/readers`);
+    return response.data; // { readers: [{user_id, last_read_at, username, display_name, avatar_url}] }
   },
   deleteMessage: async (msgId) => {
     const response = await api.delete(`/messages/${msgId}`);
