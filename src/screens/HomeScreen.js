@@ -139,10 +139,12 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
         activeOpacity={0.7}
         onPress={() => navigation?.navigate('UserProfile', { username: post.reposter_username })}
       >
-        <Ionicons name="repeat" size={13} color="#aaa" />
-        <Text style={styles.repostBannerText}>
-          {post.reposter_name || post.reposter_username}さんがリポスト
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="repeat" size={13} color="#aaa" />
+          <Text style={styles.repostBannerText}>
+            {post.reposter_name || post.reposter_username}さんがリポスト
+          </Text>
+        </View>
       </TouchableOpacity>
     )}
     <TouchableWithoutFeedback onPress={handleTap}>
@@ -594,9 +596,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     paddingHorizontal: 14,
     paddingVertical: 5,
     backgroundColor: 'rgba(0,0,0,0.55)',
