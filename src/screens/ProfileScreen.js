@@ -441,15 +441,6 @@ export default function ProfileScreen({ route, navigation }) {
         {isOwnProfile && (
           <>
             <TouchableOpacity
-              style={[styles.tab, activeTab === 'reposts' && styles.tabActive]}
-              onPress={() => handleTabSwitch('reposts')}
-            >
-              <Text style={[styles.tabText, activeTab === 'reposts' && styles.tabTextActive]}>
-                ↩️ リポスト
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={[styles.tab, activeTab === 'library' && styles.tabActive]}
               onPress={() => handleTabSwitch('library')}
             >
@@ -493,31 +484,6 @@ export default function ProfileScreen({ route, navigation }) {
             </View>
           )}
         </ScrollView>
-      )}
-
-      {/* リポスト（自分のみ） */}
-      {activeTab === 'reposts' && isOwnProfile && (
-        repostsLoading ? (
-          <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
-        ) : reposts.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>↩️</Text>
-            <Text style={styles.emptyText}>リポストがありません</Text>
-            <Text style={styles.emptyHint}>投稿詳細画面の ↩️ ボタンからリポストできます</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={reposts}
-            keyExtractor={item => String(item.id)}
-            renderItem={({ item }) => (
-              <RepostCard
-                repost={item}
-                onReadPress={(seriesId) => navigation?.navigate('SeriesDetail', { seriesId })}
-              />
-            )}
-            contentContainerStyle={{ paddingVertical: 8 }}
-          />
-        )
       )}
 
       {/* 本棚（自分のみ） */}
