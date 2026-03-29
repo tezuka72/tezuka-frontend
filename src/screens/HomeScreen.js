@@ -134,12 +134,16 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
     <View style={{ height: ITEM_HEIGHT }}>
     {/* リポストバナー */}
     {post.feed_type === 'repost' && (
-      <View style={styles.repostBanner}>
+      <TouchableOpacity
+        style={styles.repostBanner}
+        activeOpacity={0.7}
+        onPress={() => navigation?.navigate('UserProfile', { username: post.reposter_username })}
+      >
         <Ionicons name="repeat" size={13} color="#aaa" />
         <Text style={styles.repostBannerText}>
           {post.reposter_name || post.reposter_username}さんがリポスト
         </Text>
-      </View>
+      </TouchableOpacity>
     )}
     <TouchableWithoutFeedback onPress={handleTap}>
       <View style={[styles.postItem, { height: ITEM_HEIGHT }]}>
@@ -254,6 +258,9 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
 
         {/* ===== 左下 作者・タイトル情報 ===== */}
         <View style={[styles.bottomInfo, { paddingBottom: bottomPad }]}>
+          {post.feed_type === 'repost' && (
+            <Text style={styles.originalLabel}>元投稿者</Text>
+          )}
           <TouchableOpacity
             style={styles.authorRow}
             activeOpacity={0.8}
@@ -597,6 +604,13 @@ const styles = StyleSheet.create({
   repostBannerText: {
     color: '#aaa',
     fontSize: 12,
+  },
+  originalLabel: {
+    color: '#4DD4E8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 3,
+    marginLeft: 4,
   },
   sideBtn: {
     alignItems: 'center',
