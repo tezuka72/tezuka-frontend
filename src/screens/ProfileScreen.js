@@ -13,7 +13,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, bookmarkAPI, libraryAPI, postAPI, repostAPI } from '../api/client';
+import { userAPI, bookmarkAPI, libraryAPI, postAPI, repostAPI, messageAPI } from '../api/client';
 import RepostCard from '../components/repost/RepostCard';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -308,6 +308,24 @@ export default function ProfileScreen({ route, navigation }) {
     }
   };
 
+  const handleDM = async () => {
+    if (!profile) return;
+    try {
+      const { conversation_id } = await messageAPI.createConversation([profile.id], 'direct');
+      const conv = await messageAPI.getConversationDetails(conversation_id);
+      navigation?.navigate('Chat', {
+        conversation: {
+          id: conversation_id,
+          type: 'direct',
+          ...conv,
+          other_participants: [{ user_id: profile.id, username: profile.username, display_name: profile.display_name, avatar_url: profile.avatar_url }],
+        }
+      });
+    } catch (e) {
+      console.error('DM error:', e);
+    }
+  };
+
   const loadBookmarks = async () => {
     if (bookmarksLoaded) return;
     try {
@@ -404,14 +422,20 @@ export default function ProfileScreen({ route, navigation }) {
         </View>
 
         {!isOwnProfile && (
-          <TouchableOpacity
-            style={[styles.followButton, isFollowing && styles.followButtonActive]}
-            onPress={handleFollow}
-          >
-            <Text style={[styles.followButtonText, isFollowing && styles.followButtonTextActive]}>
-              {isFollowing ? `✓ ${t('profile.following')}` : t('profile.follow')}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.profileActionRow}>
+            <TouchableOpacity
+              style={[styles.followButton, isFollowing && styles.followButtonActive]}
+              onPress={handleFollow}
+            >
+              <Text style={[styles.followButtonText, isFollowing && styles.followButtonTextActive]}>
+                {isFollowing ? `✓ ${t('profile.following')}` : t('profile.follow')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dmButton} onPress={handleDM}>
+              <Ionicons name="paper-plane-outline" size={16} color={Colors.primary} />
+              <Text style={styles.dmButtonText}>DM</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={styles.profileActions}>
@@ -610,13 +634,33 @@ const styles = StyleSheet.create({
     color: Colors.muted,
     marginTop: 1,
   },
+  profileActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
   followButton: {
     backgroundColor: Colors.primary,
     borderRadius: 24,
     paddingVertical: 10,
     paddingHorizontal: 28,
-    marginBottom: 8,
     ...Shadows.glow,
+  },
+  dmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  dmButtonText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   followButtonActive: {
     backgroundColor: Colors.background,
