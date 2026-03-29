@@ -52,18 +52,22 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
+    setError('');
+    setIsLoading(true);
+
     try {
-      setError('');
-      setIsLoading(true);
       const result = await register(username, email, password, displayName);
       if (result.success && result.requiresVerification) {
         navigation?.navigate('EmailVerification', { email: result.email });
+        // ローディングはそのまま（画面遷移後に破棄される）
       } else if (!result.success) {
         setError(result.error || t('register.error'));
+        setIsLoading(false);
       }
+      // 成功時（requiresVerification なし）はローディングを維持したまま
+      // AuthContext の setUser で自動的に画面遷移する
     } catch (err) {
       setError(err.message || t('register.error'));
-    } finally {
       setIsLoading(false);
     }
   };
