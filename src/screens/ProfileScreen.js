@@ -377,9 +377,13 @@ export default function ProfileScreen({ route, navigation }) {
       {/* プロフィールヘッダー */}
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {profile.display_name?.[0]?.toUpperCase() || '?'}
-          </Text>
+          {profile.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} resizeMode="cover" />
+          ) : (
+            <Text style={styles.avatarText}>
+              {profile.display_name?.[0]?.toUpperCase() || '?'}
+            </Text>
+          )}
         </View>
         <Text style={styles.displayName}>{profile.display_name}</Text>
         <Text style={styles.username}>@{profile.username}</Text>
@@ -559,6 +563,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
     ...Shadows.medium,
+  },
+  avatarImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   avatarText: {
     color: '#FFFFFF',
