@@ -312,17 +312,21 @@ export default function ProfileScreen({ route, navigation }) {
     if (!profile) return;
     try {
       const { conversation_id } = await messageAPI.createConversation([profile.id], 'direct');
-      const conv = await messageAPI.getConversationDetails(conversation_id);
       navigation?.navigate('Chat', {
         conversation: {
           id: conversation_id,
           type: 'direct',
-          ...conv,
-          other_participants: [{ user_id: profile.id, username: profile.username, display_name: profile.display_name, avatar_url: profile.avatar_url }],
+          other_participants: [{
+            user_id: profile.id,
+            username: profile.username,
+            display_name: profile.display_name,
+            avatar_url: profile.avatar_url,
+          }],
         }
       });
     } catch (e) {
       console.error('DM error:', e);
+      Alert.alert('エラー', 'DMを開けませんでした');
     }
   };
 
