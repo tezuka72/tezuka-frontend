@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet,
-  Image, ActivityIndicator, KeyboardAvoidingView, Platform, Dimensions,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +21,7 @@ function GridItem({ item, onPress }) {
   return (
     <TouchableOpacity style={styles.gridItem} onPress={onPress} activeOpacity={0.85}>
       {thumb ? (
-        <Image source={{ uri: thumb }} style={styles.gridImage} resizeMode="cover" />
+        <Image source={{ uri: thumb }} style={styles.gridImage} contentFit="cover" cachePolicy="memory-disk" />
       ) : (
         <View style={[styles.gridImage, styles.gridImagePlaceholder]}>
           <Text style={{ fontSize: 24 }}>📖</Text>
@@ -46,7 +47,7 @@ function PostCard({ item, onPress }) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       {firstImage ? (
-        <Image source={{ uri: firstImage }} style={styles.cardImage} resizeMode="cover" />
+        <Image source={{ uri: firstImage }} style={styles.cardImage} contentFit="cover" cachePolicy="memory-disk" />
       ) : (
         <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
           <Text style={{ fontSize: 28 }}>📖</Text>

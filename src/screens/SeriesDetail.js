@@ -3,12 +3,12 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import RepostModal from '../components/repost/RepostModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +33,7 @@ function EpisodeCard({ post, index, onPress, onLike }) {
       {/* サムネイル */}
       <View style={styles.cardThumb}>
         {image ? (
-          <Image source={{ uri: image }} style={styles.thumbImage} resizeMode="cover" />
+          <Image source={{ uri: image }} style={styles.thumbImage} contentFit="cover" cachePolicy="memory-disk" />
         ) : (
           <View style={styles.thumbPlaceholder}>
             <Ionicons name="image-outline" size={24} color={Colors.muted} />
@@ -253,7 +253,8 @@ export default function SeriesDetail({ route, navigation }) {
                     <Image
                       source={{ uri: series.cover_image_url }}
                       style={styles.heroImage}
-                      resizeMode="cover"
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
                     />
                   ) : (
                     <View style={styles.heroPlaceholder}>

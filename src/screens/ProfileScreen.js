@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,7 +46,7 @@ function MiniPostCard({ post, onPress, onDelete }) {
       delayLongPress={400}
     >
       {firstImage ? (
-        <Image source={{ uri: firstImage }} style={styles.miniImage} resizeMode="cover" />
+        <Image source={{ uri: firstImage }} style={styles.miniImage} contentFit="cover" cachePolicy="memory-disk" />
       ) : (
         <View style={[styles.miniImage, styles.miniImagePlaceholder]}>
           <Text style={styles.miniImagePlaceholderText}>📖</Text>
@@ -378,7 +378,7 @@ export default function ProfileScreen({ route, navigation }) {
       <View style={styles.header}>
         <View style={styles.avatar}>
           {profile.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} resizeMode="cover" />
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
             <Text style={styles.avatarText}>
               {profile.display_name?.[0]?.toUpperCase() || '?'}
