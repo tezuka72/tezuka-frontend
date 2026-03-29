@@ -31,6 +31,7 @@ export default function RegisterScreen({ navigation }) {
   const [error, setError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const validatePassword = (pwd) => {
     const hasMinLength = pwd.length >= 8;
@@ -63,9 +64,10 @@ export default function RegisterScreen({ navigation }) {
       } else if (!result.success) {
         setError(result.error || t('register.error'));
         setIsLoading(false);
+      } else {
+        // 成功：成功状態を表示したまま AuthContext の setUser で自動的に画面遷移
+        setIsSuccess(true);
       }
-      // 成功時（requiresVerification なし）はローディングを維持したまま
-      // AuthContext の setUser で自動的に画面遷移する
     } catch (err) {
       setError(err.message || t('register.error'));
       setIsLoading(false);
@@ -144,8 +146,10 @@ export default function RegisterScreen({ navigation }) {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TouchableOpacity style={[styles.button, isLoading && { opacity: 0.7 }]} onPress={handleRegister} disabled={isLoading}>
-            {isLoading
+          <TouchableOpacity style={[styles.button, (isLoading || isSuccess) && { opacity: 0.7 }]} onPress={handleRegister} disabled={isLoading || isSuccess}>
+            {isSuccess
+              ? <Text style={styles.buttonText}>✓ 登録完了！</Text>
+              : isLoading
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.buttonText}>{t('register.button')}</Text>}
           </TouchableOpacity>
