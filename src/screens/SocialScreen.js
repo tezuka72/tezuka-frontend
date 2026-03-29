@@ -169,7 +169,8 @@ export default function SocialScreen() {
 
   useFocusEffect(useCallback(() => {
     loadPosts();
-    setConvLoading(true);
+    // 初回のみローディング表示（再フォーカス時は既存データを維持）
+    if (conversations.length === 0) setConvLoading(true);
     loadConversations();
   }, [loadPosts, loadConversations]));
 
