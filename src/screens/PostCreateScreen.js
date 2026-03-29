@@ -234,7 +234,7 @@ export default function PostCreateScreen({ navigation }) {
   // Step 2: サムネ選択
   if (step === 2) {
     return (
-      <View style={[styles.stepContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.stepContainer, { paddingTop: insets.top, justifyContent: 'flex-start' }]}>
         <View style={styles.stepHeader}>
           <TouchableOpacity onPress={() => setStep(1)}>
             <Text style={styles.backText}>＜ 戻る</Text>
@@ -259,7 +259,7 @@ export default function PostCreateScreen({ navigation }) {
             </TouchableOpacity>
           ))}
         </ScrollView>
-        <TouchableOpacity style={styles.button} onPress={handleNextFromPreview}>
+        <TouchableOpacity style={[styles.button, { marginTop: 24, marginBottom: Math.max(insets.bottom, 20) + 16 }]} onPress={handleNextFromPreview}>
           <Text style={styles.buttonText}>次へ</Text>
         </TouchableOpacity>
       </View>
