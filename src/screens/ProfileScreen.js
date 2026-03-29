@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { userAPI, bookmarkAPI, libraryAPI, postAPI, repostAPI } from '../api/client';
 import RepostCard from '../components/repost/RepostCard';
@@ -254,6 +255,17 @@ export default function ProfileScreen({ route, navigation }) {
     loadProfile();
     loadUserPosts();
   }, [username]);
+
+  // EditProfileから戻ったときに再フェッチ
+  const isMounted = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (isMounted.current) {
+      loadProfile();
+      loadUserPosts();
+    } else {
+      isMounted.current = true;
+    }
+  }, [username]));
 
   const loadProfile = async () => {
     try {
