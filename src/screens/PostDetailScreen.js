@@ -313,6 +313,12 @@ export default function PostDetailScreen({ route, navigation }) {
             @{reply.username} {reply.display_name}
           </Text>
           <Text style={styles.commentText}>{reply.content}</Text>
+          <TouchableOpacity
+            style={[styles.replyBtn, { marginTop: 4 }]}
+            onPress={() => setReplyingTo({ id: comment.id, username: reply.username })}
+          >
+            <Text style={styles.replyBtnText}>返信</Text>
+          </TouchableOpacity>
         </View>
       ))}
     </View>
