@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator, Image, Alert,
+  TextInput, ActivityIndicator, Alert,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +13,7 @@ import { messageAPI, userAPI } from '../api/client';
 
 function Avatar({ uri, name, size = 40 }) {
   if (uri) {
-    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+    return <ExpoImage source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />;
   }
   const initial = (name || '?')[0].toUpperCase();
   return (

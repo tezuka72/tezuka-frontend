@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Image, RefreshControl,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
@@ -20,7 +21,7 @@ function timeAgo(dateStr) {
 
 function Avatar({ uri, name, size = 44 }) {
   if (uri) {
-    return <Image source={{ uri }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} />;
+    return <ExpoImage source={{ uri }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} contentFit="cover" />;
   }
   const initial = (name || '?')[0].toUpperCase();
   return (
