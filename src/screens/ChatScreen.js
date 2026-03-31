@@ -4,6 +4,7 @@ import {
   TextInput, ActivityIndicator, Image, Alert, Modal,
   KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -31,7 +32,7 @@ function MentionText({ text, style }) {
 
 function Avatar({ uri, name, size = 32 }) {
   if (uri) {
-    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+    return <ExpoImage source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />;
   }
   const initial = (name || '?')[0].toUpperCase();
   return (
@@ -59,16 +60,20 @@ function ReactionBar({ reactions, onToggle, myId }) {
   );
 }
 
-function MessageItem({ msg, isMine, onLongPress, onReactionToggle, readAvatars }) {
+function MessageItem({ msg, isMine, isGroup, onLongPress, onReactionToggle, readAvatars }) {
+  const showAvatar = !isMine || isGroup;
+  const showName = !isMine || isGroup;
   return (
     <Pressable onLongPress={() => onLongPress(msg)} delayLongPress={400}>
       <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
-        {!isMine && (
-          <Avatar uri={msg.sender_avatar} name={msg.sender_display_name || msg.sender_username} />
+        {showAvatar && (
+          <Avatar uri={msg.sender_avatar} name={msg.sender_display_name || msg.sender_username} size={34} />
         )}
         <View style={[styles.msgBubbleWrap, isMine && styles.msgBubbleWrapMine]}>
-          {!isMine && (
-            <Text style={styles.senderName}>{msg.sender_display_name || msg.sender_username}</Text>
+          {showName && (
+            <Text style={[styles.senderName, isMine && styles.senderNameMine]}>
+              {msg.sender_display_name || msg.sender_username}
+            </Text>
           )}
           {/* 返信引用 */}
           {msg.reply_to_id && (
@@ -124,6 +129,15 @@ export default function ChatScreen() {
   const oldestIdRef = useRef(null); // 最も古いメッセージID（前読み込み用）
   const newestIdRef = useRef(null); // 最も新しいメッセージID（ポーリング用）
 
+  // チャンネル関連
+  const isGroup = conversation.type === 'group' && !conversation.parent_id;
+  const [channels, setChannels] = useState([]);
+  const [activeChannelId, setActiveChannelId] = useState(null); // nullはグループ本体
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelDesc, setNewChannelDesc] = useState('');
+  const [creatingChannel, setCreatingChannel] = useState(false);
+
   // 会話タイトルをヘッダーに設定
   useEffect(() => {
     const others = conversation.other_participants || [];
@@ -143,15 +157,75 @@ export default function ChatScreen() {
     });
   }, [conversation, navigation]);
 
+  // チャンネル読み込み（グループのみ）
+  useEffect(() => {
+    if (isGroup) loadChannels();
+  }, [isGroup]);
+
+  const loadChannels = async () => {
+    try {
+      const data = await messageAPI.getChannels(conversation.id);
+      setChannels(data.channels || []);
+    } catch {}
+  };
+
+  const handleCreateChannel = async () => {
+    if (!newChannelName.trim()) return;
+    setCreatingChannel(true);
+    try {
+      const data = await messageAPI.createChannel(conversation.id, newChannelName, newChannelDesc);
+      const newCh = { id: data.channel_id, name: newChannelName.trim(), description: newChannelDesc.trim(), unread_count: 0, is_member: true, member_count: 1 };
+      setChannels(prev => [...prev, newCh]);
+      setNewChannelName('');
+      setNewChannelDesc('');
+      setShowCreateChannel(false);
+      setActiveChannelId(data.channel_id);
+    } catch {
+      Alert.alert('エラー', 'チャンネルの作成に失敗しました');
+    } finally {
+      setCreatingChannel(false);
+    }
+  };
+
+  const handleChannelPress = async (ch) => {
+    if (ch.is_member) {
+      setActiveChannelId(ch.id);
+    } else {
+      Alert.alert(
+        `# ${ch.name}`,
+        ch.description ? `${ch.description}\n\nこのチャンネルに参加しますか？` : 'このチャンネルに参加しますか？',
+        [
+          { text: 'キャンセル', style: 'cancel' },
+          {
+            text: '参加する',
+            onPress: async () => {
+              try {
+                await messageAPI.joinChannel(conversation.id, ch.id);
+                setChannels(prev => prev.map(c => c.id === ch.id ? { ...c, is_member: true, member_count: (c.member_count || 0) + 1 } : c));
+                setActiveChannelId(ch.id);
+              } catch {
+                Alert.alert('エラー', '参加に失敗しました');
+              }
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  // アクティブチャンネルID変更時にメッセージ再ロード
+  const currentConvId = activeChannelId || conversation.id;
+
   // 初回ロード
   useEffect(() => {
     loadMessages();
     return () => clearInterval(pollingRef.current);
-  }, []);
+  }, [currentConvId]);
 
   const loadMessages = async () => {
+    setLoading(true);
     try {
-      const data = await messageAPI.getMessages(conversation.id);
+      const data = await messageAPI.getMessages(currentConvId);
       const msgs = data.messages || [];
       setMessages(msgs);
       if (msgs.length > 0) {
@@ -169,8 +243,8 @@ export default function ChatScreen() {
   const pollNewMessages = useCallback(async () => {
     try {
       const [msgData, readersData] = await Promise.all([
-        messageAPI.getMessages(conversation.id),
-        messageAPI.getReaders(conversation.id),
+        messageAPI.getMessages(currentConvId),
+        messageAPI.getReaders(currentConvId),
       ]);
       const fresh = msgData.messages || [];
       if (fresh.length > 0) {
@@ -183,19 +257,19 @@ export default function ChatScreen() {
             newestIdRef.current = latestId;
             return [...prev, ...newOnes];
           });
-          messageAPI.markRead(conversation.id).catch(() => {});
+          messageAPI.markRead(currentConvId).catch(() => {});
         }
       }
       setReaders(readersData.readers || []);
     } catch {}
-  }, [conversation.id]);
+  }, [currentConvId]);
 
   // フォーカス時に既読更新とポーリング開始
   useFocusEffect(useCallback(() => {
-    messageAPI.markRead(conversation.id).catch(() => {});
+    messageAPI.markRead(currentConvId).catch(() => {});
     pollingRef.current = setInterval(pollNewMessages, POLL_INTERVAL);
     return () => clearInterval(pollingRef.current);
-  }, [conversation.id, pollNewMessages]));
+  }, [currentConvId, pollNewMessages]));
 
   const sendMessage = async () => {
     const content = text.trim();
@@ -205,7 +279,7 @@ export default function ChatScreen() {
     const replyToId = replyTo?.id || null;
     setReplyTo(null);
     try {
-      const data = await messageAPI.sendMessage(conversation.id, content, replyToId);
+      const data = await messageAPI.sendMessage(currentConvId, content, replyToId);
       const newMsg = data.message;
       setMessages(prev => [...prev, newMsg]);
       newestIdRef.current = newMsg.id;
@@ -343,6 +417,78 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
+      {/* チャンネルバー（グループのみ） */}
+      {isGroup && (
+        <View style={styles.channelBar}>
+          <TouchableOpacity
+            style={[styles.channelTab, activeChannelId === null && styles.channelTabActive]}
+            onPress={() => setActiveChannelId(null)}
+          >
+            <Text style={[styles.channelTabText, activeChannelId === null && styles.channelTabTextActive]}>
+              # メイン
+            </Text>
+          </TouchableOpacity>
+          {channels.map(ch => (
+            <TouchableOpacity
+              key={ch.id}
+              style={[styles.channelTab, activeChannelId === ch.id && styles.channelTabActive, !ch.is_member && styles.channelTabLocked]}
+              onPress={() => handleChannelPress(ch)}
+            >
+              <Text style={[styles.channelTabText, activeChannelId === ch.id && styles.channelTabTextActive, !ch.is_member && styles.channelTabTextLocked]}>
+                {ch.is_member ? `# ${ch.name}` : `🔒 ${ch.name}`}
+              </Text>
+              {ch.unread_count > 0 && (
+                <View style={styles.channelUnread}>
+                  <Text style={styles.channelUnreadText}>{ch.unread_count}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.channelAddBtn} onPress={() => setShowCreateChannel(true)}>
+            <Ionicons name="add" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* チャンネル作成モーダル */}
+      <Modal visible={showCreateChannel} transparent animationType="slide" onRequestClose={() => setShowCreateChannel(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCreateChannel(false)}>
+          <Pressable style={styles.channelCreateSheet} onPress={e => e.stopPropagation()}>
+            <Text style={styles.channelCreateTitle}>チャンネルを作成</Text>
+            <TextInput
+              style={styles.channelInput}
+              placeholder="チャンネル名（例：雑談）"
+              placeholderTextColor={Colors.muted}
+              value={newChannelName}
+              onChangeText={setNewChannelName}
+              maxLength={30}
+              autoFocus
+            />
+            <TextInput
+              style={[styles.channelInput, { marginTop: 8 }]}
+              placeholder="説明（任意）"
+              placeholderTextColor={Colors.muted}
+              value={newChannelDesc}
+              onChangeText={setNewChannelDesc}
+              maxLength={100}
+            />
+            <View style={styles.channelCreateButtons}>
+              <TouchableOpacity style={styles.channelCancelBtn} onPress={() => setShowCreateChannel(false)}>
+                <Text style={styles.channelCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.channelConfirmBtn, (!newChannelName.trim() || creatingChannel) && { opacity: 0.5 }]}
+                onPress={handleCreateChannel}
+                disabled={!newChannelName.trim() || creatingChannel}
+              >
+                {creatingChannel
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.channelConfirmText}>作成</Text>}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} />
@@ -375,6 +521,7 @@ export default function ChatScreen() {
               <MessageItem
                 msg={item}
                 isMine={item.sender_id === user?.id}
+                isGroup={isGroup}
                 onLongPress={onLongPress}
                 onReactionToggle={onReactionToggle}
                 readAvatars={readAvatars}
@@ -478,6 +625,101 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  channelBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  channelTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: Colors.background,
+    gap: 4,
+  },
+  channelTabActive: {
+    backgroundColor: Colors.primary,
+  },
+  channelTabText: {
+    color: Colors.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  channelTabTextActive: {
+    color: '#fff',
+  },
+  channelTabLocked: {
+    opacity: 0.6,
+  },
+  channelTabTextLocked: {
+    color: Colors.muted,
+  },
+  channelUnread: {
+    backgroundColor: '#E94B7A',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 16,
+    alignItems: 'center',
+  },
+  channelUnreadText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  channelAddBtn: {
+    padding: 4,
+  },
+  channelCreateSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 36,
+  },
+  channelCreateTitle: {
+    color: Colors.foreground,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  channelInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: Colors.foreground,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  channelCreateButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  channelCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    alignItems: 'center',
+  },
+  channelCancelText: { color: Colors.muted, fontWeight: '600' },
+  channelConfirmBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+  },
+  channelConfirmText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   listContent: { paddingVertical: 12, paddingHorizontal: 12 },
   emptyWrap: { flex: 1, alignItems: 'center', paddingTop: 60 },
@@ -489,6 +731,7 @@ const styles = StyleSheet.create({
   msgBubbleWrap: { maxWidth: '75%' },
   msgBubbleWrapMine: { alignItems: 'flex-end' },
   senderName: { fontSize: 12, color: Colors.muted, marginBottom: 2, marginLeft: 4 },
+  senderNameMine: { textAlign: 'right', marginLeft: 0, marginRight: 4 },
 
   // 返信引用
   replyQuote: {
