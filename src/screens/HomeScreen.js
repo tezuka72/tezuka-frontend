@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   View,
   Text,
@@ -506,7 +507,10 @@ export default function HomeScreen({ navigation }) {
 
   if (error && posts.length === 0) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <LinearGradient
+        colors={['#5C35A0', '#2F6FD4', '#42BDD4', '#D4EDBE', '#F5C842', '#F5A623']}
+        style={[styles.screen, { paddingTop: insets.top }]}
+      >
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📡</Text>
           <Text style={styles.emptyTitle}>{error}</Text>
@@ -514,12 +518,15 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.retryText}>再試行</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <LinearGradient
+      colors={['#5C35A0', '#2F6FD4', '#42BDD4', '#D4EDBE', '#F5C842', '#F5A623']}
+      style={[styles.screen, { paddingTop: insets.top }]}
+    >
       {/* ヘッダー */}
       <View style={styles.header}>
         <View style={styles.tabs}>
@@ -591,14 +598,13 @@ export default function HomeScreen({ navigation }) {
           ) : null
         )}
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
 
   // ---- ヘッダー ----
