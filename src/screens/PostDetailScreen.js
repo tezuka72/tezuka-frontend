@@ -54,6 +54,8 @@ export default function PostDetailScreen({ route, navigation }) {
   const [repostModalVisible, setRepostModalVisible] = useState(false);
   // 縦スクロール漫画のlazy loading: 最初の5枚だけ表示し、スクロールに応じて追加
   const [visibleImageCount, setVisibleImageCount] = useState(5);
+  // 各画像の実際のアスペクト比に基づく高さ
+  const [imageHeights, setImageHeights] = useState({});
 
   // visibleImageCount が増えるたびに次の3枚をプリフェッチ
   useEffect(() => {
@@ -342,9 +344,15 @@ export default function PostDetailScreen({ route, navigation }) {
                   <Image
                     key={i}
                     source={{ uri: img?.image_url || img }}
-                    style={styles.verticalImage}
-                    contentFit="contain"
+                    style={[styles.verticalImage, imageHeights[i] != null && { height: imageHeights[i] }]}
+                    contentFit="cover"
                     transition={150}
+                    onLoad={(e) => {
+                      const { width, height } = e.source;
+                      if (width > 0) {
+                        setImageHeights(prev => ({ ...prev, [i]: SCREEN_WIDTH * (height / width) }));
+                      }
+                    }}
                   />
                 ))}
                 {visibleImageCount < post.images.length && (
@@ -428,44 +436,46 @@ export default function PostDetailScreen({ route, navigation }) {
             )}
 
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-                <Text style={styles.actionIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
-                <Text style={styles.actionText}>{post.like_count || 0}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton} onPress={openComments}>
-                <Text style={styles.actionIcon}>💬</Text>
-                <Text style={styles.actionText}>{post.comment_count || 0}</Text>
-              </TouchableOpacity>
-              <View style={styles.actionButton}>
-                <Text style={styles.actionIcon}>👁️</Text>
-                <Text style={styles.actionText}>{post.view_count || 0}</Text>
-              </View>
-              <TouchableOpacity style={styles.actionButton} onPress={handleBookmark}>
-                <Ionicons
-                  name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-                  size={22}
-                  color={isBookmarked ? Colors.primary : Colors.muted}
-                />
-              </TouchableOpacity>
-              {post.series_id && (
+              <View style={styles.actionsRow}>
+                <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+                  <Text style={styles.actionIcon}>{post.is_liked ? '❤️' : '🤍'}</Text>
+                  <Text style={styles.actionText}>{post.like_count || 0}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton} onPress={openComments}>
+                  <Text style={styles.actionIcon}>💬</Text>
+                  <Text style={styles.actionText}>{post.comment_count || 0}</Text>
+                </TouchableOpacity>
+                <View style={styles.actionButton}>
+                  <Text style={styles.actionIcon}>👁️</Text>
+                  <Text style={styles.actionText}>{post.view_count || 0}</Text>
+                </View>
+                <TouchableOpacity style={styles.actionButton} onPress={handleBookmark}>
+                  <Ionicons
+                    name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                    size={22}
+                    color={isBookmarked ? Colors.primary : Colors.muted}
+                  />
+                </TouchableOpacity>
+                {post.series_id && (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => shareSeries(post.series_id, post.id, post.title).catch(() => {})}
+                  >
+                    <Ionicons name="share-outline" size={22} color={Colors.muted} />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => shareSeries(post.series_id, post.id, post.title).catch(() => {})}
+                  onPress={() => setRepostModalVisible(true)}
                 >
-                  <Ionicons name="share-outline" size={22} color={Colors.muted} />
+                  <Text style={{ fontSize: 20 }}>↩️</Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => setRepostModalVisible(true)}
-              >
-                <Text style={{ fontSize: 20 }}>↩️</Text>
-              </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={styles.supportButton}
                 onPress={() => setGiftModalVisible(true)}
               >
-                <Text style={styles.supportButtonText}>🎁 ギフト・応援</Text>
+                <Text style={styles.supportButtonText}>応援</Text>
               </TouchableOpacity>
             </View>
 
@@ -615,24 +625,22 @@ export default function PostDetailScreen({ route, navigation }) {
         receiverId={post.user_id}
         postId={post.id}
       />
-      {post.series_id && (
-        <RepostModal
-          visible={repostModalVisible}
-          onClose={() => setRepostModalVisible(false)}
-          repostType="page"
-          manga={{
-            id: post.series_id,
-            title: post.title,
-            cover_url: post.images?.[0]?.image_url || post.images?.[0] || '',
-          }}
-          page={post.images?.[currentImageIndex] ? {
-            id: post.images[currentImageIndex]?.id || String(currentImageIndex),
-            image_url: post.images[currentImageIndex]?.image_url || post.images[currentImageIndex],
-            page_number: currentImageIndex + 1,
-            episode_id: post.id,
-          } : undefined}
-        />
-      )}
+      <RepostModal
+        visible={repostModalVisible}
+        onClose={() => setRepostModalVisible(false)}
+        repostType="page"
+        manga={{
+          id: post.series_id || post.id,
+          title: post.title,
+          cover_url: post.images?.[0]?.image_url || post.images?.[0] || '',
+        }}
+        page={post.images?.[currentImageIndex] ? {
+          id: post.images[currentImageIndex]?.id || String(currentImageIndex),
+          image_url: post.images[currentImageIndex]?.image_url || post.images[currentImageIndex],
+          page_number: currentImageIndex + 1,
+          episode_id: post.id,
+        } : undefined}
+      />
     </View>
   );
 }
@@ -798,13 +806,17 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: Colors.border,
     paddingVertical: 12,
     marginBottom: 16,
+    gap: 10,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   actionButton: {
     flexDirection: 'row',
@@ -821,7 +833,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   supportButton: {
-    marginLeft: 'auto',
+    alignSelf: 'flex-start',
     backgroundColor: Colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 7,

@@ -91,12 +91,12 @@ export default function ConversationListScreen() {
       setConversations(data.conversations || []);
       setError(null);
     } catch (e) {
-      setError(t('inbox.loadError'));
+      setError('メッセージの読み込みに失敗しました');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [t]);
+  }, []);
 
   // 画面フォーカス時にリロード
   useFocusEffect(useCallback(() => {

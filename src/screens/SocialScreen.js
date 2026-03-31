@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  RefreshControl, ActivityIndicator, Image,
+  RefreshControl, ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +32,7 @@ function PostCard({ post, onPress, onLike, onAuthorPress }) {
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       {firstImage && (
         <View style={styles.imageContainer}>
-          <Image source={{ uri: firstImage }} style={styles.cardImage} resizeMode="cover" />
+          <Image source={{ uri: firstImage }} style={styles.cardImage} contentFit="cover" cachePolicy="memory-disk" />
           {imageCount > 1 && (
             <View style={styles.imageCounter}>
               <Text style={styles.imageCounterText}>{imageCount}{t('home.imageCountSuffix')}</Text>
@@ -70,7 +71,7 @@ function PostCard({ post, onPress, onLike, onAuthorPress }) {
 // ─── メッセージ：アバター ─────────────────────────────────
 function Avatar({ uri, name, size = 44 }) {
   if (uri) {
-    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: Colors.card }} />;
+    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: Colors.card }} contentFit="cover" cachePolicy="memory-disk" />;
   }
   const initial = (name || '?')[0].toUpperCase();
   return (
@@ -87,28 +88,28 @@ function ConversationItem({ item, currentUserId, onPress }) {
   const displayName = isGroup
     ? (item.name || others.map(u => u.display_name || u.username).join(', '))
     : (others[0]?.display_name || others[0]?.username || '?');
-  const avatarUri = isGroup ? null : others[0]?.avatar_url;
+  const avatarUri = isGroup ? (item.icon_url || null) : others[0]?.avatar_url;
   const lastContent = item.last_message_content || '';
   const isMine = item.last_message_sender_id === currentUserId;
-  const senderLabel = isMine ? 'あなた: ' : (item.last_message_sender_display_name || item.last_message_sender_username || '');
+  const senderLabel = isMine ? 'あなた: ' : '';
   const unread = parseInt(item.unread_count) || 0;
 
   return (
-    <TouchableOpacity style={styles.convItem} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.convItem} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.convAvatarWrap}>
-        <Avatar uri={avatarUri} name={displayName} />
+        <Avatar uri={avatarUri} name={displayName} size={54} />
         {isGroup && (
           <View style={styles.groupBadge}>
-            <Ionicons name="people" size={10} color="#fff" />
+            <Ionicons name="people" size={11} color="#fff" />
           </View>
         )}
       </View>
       <View style={styles.convBody}>
         <View style={styles.convHeader}>
           <Text style={styles.convName} numberOfLines={1}>{displayName}</Text>
-          {item.last_message_created_at && (
-            <Text style={styles.convTime}>{timeAgo(item.last_message_created_at)}</Text>
-          )}
+          <Text style={styles.convTime}>
+            {item.last_message_created_at ? timeAgo(item.last_message_created_at) : ''}
+          </Text>
         </View>
         <View style={styles.convFooter}>
           <Text style={[styles.convPreview, unread > 0 && styles.convPreviewBold]} numberOfLines={1}>
@@ -150,9 +151,9 @@ export default function SocialScreen() {
       const response = await feedAPI.getFollowingFeed();
       setPosts(response.posts || []);
     } catch {
-      setPostsError(t('friends.loadError'));
+      setPostsError('フィードの読み込みに失敗しました');
     }
-  }, [t]);
+  }, []);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -160,12 +161,12 @@ export default function SocialScreen() {
       const data = await messageAPI.getConversations();
       setConversations(data.conversations || []);
     } catch {
-      setConvError(t('inbox.loadError'));
+      setConvError('メッセージの読み込みに失敗しました');
     } finally {
       setConvLoading(false);
       setConvRefreshing(false);
     }
-  }, [t]);
+  }, []);
 
   useFocusEffect(useCallback(() => {
     loadPosts();
@@ -411,30 +412,30 @@ const styles = StyleSheet.create({
   statText: { fontSize: 13, color: Colors.muted, fontWeight: '600' },
 
   // 会話アイテム
-  convItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  convAvatarWrap: { position: 'relative', marginRight: 12 },
+  convItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
+  convAvatarWrap: { position: 'relative', marginRight: 14 },
   avatarPlaceholder: { backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  avatarInitial: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
+  avatarInitial: { color: '#fff', fontWeight: 'bold', fontSize: 20 },
   groupBadge: {
     position: 'absolute', bottom: 0, right: 0,
-    width: 18, height: 18, borderRadius: 9,
+    width: 20, height: 20, borderRadius: 10,
     backgroundColor: Colors.violet,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: Colors.background,
   },
-  convBody: { flex: 1 },
-  convHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  convName: { fontSize: 15, fontWeight: '600', color: Colors.foreground, flex: 1, marginRight: 8 },
-  convTime: { fontSize: 12, color: Colors.muted },
+  convBody: { flex: 1, justifyContent: 'center' },
+  convHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
+  convName: { fontSize: 16, fontWeight: '700', color: Colors.foreground, flex: 1, marginRight: 8 },
+  convTime: { fontSize: 11, color: Colors.muted, flexShrink: 0 },
   convFooter: { flexDirection: 'row', alignItems: 'center' },
-  convPreview: { fontSize: 13, color: Colors.muted, flex: 1 },
+  convPreview: { fontSize: 13, color: Colors.muted, flex: 1, lineHeight: 18 },
   convPreviewBold: { color: Colors.foreground, fontWeight: '500' },
   unreadBadge: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10, minWidth: 20, height: 20,
+    backgroundColor: '#4CD964',
+    borderRadius: 11, minWidth: 22, height: 22,
     alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 5, marginLeft: 8,
+    paddingHorizontal: 6, marginLeft: 8,
   },
-  unreadText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-  separator: { height: 1, backgroundColor: Colors.border, marginLeft: 72 },
+  unreadText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  separator: { height: 1, backgroundColor: Colors.border, marginLeft: 82 },
 });

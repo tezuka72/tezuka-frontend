@@ -169,9 +169,14 @@ export default function PostCreateScreen({ navigation }) {
       const created = await postAPI.create(formData);
       const postId = created.post?.id || created.id;
       if (postId && pendingProducts.length > 0) {
-        await Promise.all(
-          pendingProducts.map(p => affiliateAPI.tagProduct({ post_id: postId, ...p }).catch(() => {}))
+        const results = await Promise.allSettled(
+          pendingProducts.map(p => affiliateAPI.tagProduct({ post_id: postId, ...p }))
         );
+        const failed = results.filter(r => r.status === 'rejected');
+        if (failed.length > 0) {
+          console.error('Product tag errors:', failed.map(f => f.reason?.response?.data || f.reason?.message));
+          Alert.alert('商品登録エラー', `${failed.length}件の商品登録に失敗しました: ${failed[0]?.reason?.response?.data?.errors?.[0]?.msg || failed[0]?.reason?.message || '不明なエラー'}`);
+        }
       }
       Alert.alert(t('common.success'), t('create.successMessage'));
       setTitle('');

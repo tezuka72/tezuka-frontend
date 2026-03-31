@@ -261,23 +261,48 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
             <Text style={styles.postDesc} numberOfLines={1}>{post.description}</Text>
           ) : null}
           <View style={styles.actionBar}>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleLikeButton} activeOpacity={0.7}>
-              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={21} color={isLiked ? '#FF3B5C' : Colors.muted} />
-              <Text style={[styles.actionCount, isLiked && { color: '#FF3B5C' }]}>{formatCount(likeCount)}</Text>
+            {/* ❤ いいね — 思考バブル（雲形） */}
+            <TouchableOpacity style={styles.mangaBtn} onPress={handleLikeButton} activeOpacity={0.7}>
+              <View style={[styles.cloudBubble, isLiked && styles.cloudBubbleActive]}>
+                <Text style={[styles.cloudIcon, isLiked && { color: '#FF3B5C' }]}>{isLiked ? '❤' : '♡'}</Text>
+              </View>
+              <Text style={[styles.mangaCount, isLiked && { color: '#FF3B5C' }]}>{formatCount(likeCount)}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={openComments} activeOpacity={0.7}>
-              <Ionicons name="chatbubble-outline" size={20} color={Colors.muted} />
-              <Text style={styles.actionCount}>{formatCount(commentCount)}</Text>
+
+            {/* 💬 コメント — スターバースト */}
+            <TouchableOpacity style={styles.mangaBtn} onPress={openComments} activeOpacity={0.7}>
+              <View style={styles.burstWrap}>
+                <View style={[StyleSheet.absoluteFillObject, styles.burstCenter]}>
+                  <View style={styles.burst1} />
+                </View>
+                <View style={[StyleSheet.absoluteFillObject, styles.burstCenter]}>
+                  <View style={styles.burst2} />
+                </View>
+                <Text style={styles.bangText}>!!</Text>
+              </View>
+              <Text style={styles.mangaCount}>{formatCount(commentCount)}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleBookmark} activeOpacity={0.7}>
-              <Ionicons name={isBookmarked ? 'bookmark' : 'bookmark-outline'} size={20} color={isBookmarked ? Colors.accent : Colors.muted} />
+
+            {/* 🔖 ブックマーク — 短冊＋ハッチング */}
+            <TouchableOpacity style={styles.mangaBtn} onPress={handleBookmark} activeOpacity={0.7}>
+              <View style={[styles.ribbon, isBookmarked && styles.ribbonActive]}>
+                <View style={[styles.hatchLine, isBookmarked && { backgroundColor: Colors.accent }]} />
+                <View style={[styles.hatchLine, isBookmarked && { backgroundColor: Colors.accent }]} />
+                <View style={[styles.hatchLine, isBookmarked && { backgroundColor: Colors.accent }]} />
+              </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => setRepostModalVisible(true)} activeOpacity={0.7}>
-              <Ionicons name="repeat" size={21} color={Colors.muted} />
+
+            {/* 🔁 リポスト — 傾きフレーム */}
+            <TouchableOpacity style={styles.mangaBtn} onPress={() => setRepostModalVisible(true)} activeOpacity={0.7}>
+              <View style={styles.repostFrame}>
+                <Ionicons name="repeat" size={15} color={Colors.foreground} />
+              </View>
             </TouchableOpacity>
+
+            <Text style={styles.starAccent}>★</Text>
             <View style={styles.actionSpacer} />
             <View style={styles.viewRow}>
-              <Ionicons name="eye-outline" size={14} color={Colors.muted} />
+              <Ionicons name="eye-outline" size={13} color={Colors.muted} />
               <Text style={styles.viewCount}>{formatCount(post.view_count)}</Text>
             </View>
           </View>
@@ -812,18 +837,131 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  actionBtn: {
+
+  // ── マンガ風アクションボタン共通 ──
+  mangaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
-    paddingRight: 16,
     gap: 5,
+    marginRight: 12,
   },
-  actionCount: {
+  mangaCount: {
+    fontSize: 11,
+    fontWeight: '700',
     color: Colors.muted,
-    fontSize: 13,
-    fontWeight: '600',
   },
+
+  // ❤ 思考バブル（雲形いいね）
+  cloudBubble: {
+    width: 40,
+    height: 34,
+    borderWidth: 3,
+    borderColor: Colors.foreground,
+    borderRadius: 18,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 13,
+    borderBottomLeftRadius: 13,
+    borderBottomRightRadius: 21,
+    backgroundColor: '#FEFCE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cloudBubbleActive: {
+    borderColor: '#FF3B5C',
+    backgroundColor: '#FFF0F3',
+  },
+  cloudIcon: {
+    fontSize: 17,
+    lineHeight: 21,
+    color: Colors.foreground,
+  },
+
+  // !! スターバースト（爆発吹き出しコメント）
+  burstWrap: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  burstCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  burst1: {
+    width: 30,
+    height: 30,
+    borderWidth: 3,
+    borderColor: Colors.foreground,
+    backgroundColor: '#FEFCE8',
+    borderRadius: 3,
+  },
+  burst2: {
+    width: 30,
+    height: 30,
+    borderWidth: 3,
+    borderColor: Colors.foreground,
+    backgroundColor: '#FEFCE8',
+    borderRadius: 3,
+    transform: [{ rotate: '45deg' }],
+  },
+  bangText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.foreground,
+    letterSpacing: -2,
+    zIndex: 3,
+  },
+
+  // 🔖 短冊ブックマーク＋ハッチング
+  ribbon: {
+    width: 26,
+    height: 36,
+    borderWidth: 3,
+    borderColor: Colors.foreground,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    backgroundColor: '#FEFCE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 2,
+  },
+  ribbonActive: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accent + '18',
+  },
+  hatchLine: {
+    width: 13,
+    height: 2,
+    backgroundColor: Colors.foreground,
+    borderRadius: 1,
+  },
+
+  // 🔁 傾きフレームリポスト
+  repostFrame: {
+    width: 36,
+    height: 30,
+    borderWidth: 3,
+    borderColor: Colors.foreground,
+    borderRadius: 5,
+    borderTopRightRadius: 13,
+    borderBottomLeftRadius: 13,
+    backgroundColor: '#FEFCE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '3deg' }],
+  },
+
+  // 装飾
+  starAccent: {
+    fontSize: 11,
+    color: Colors.muted,
+    marginLeft: 2,
+    marginTop: -6,
+  },
+
   actionSpacer: {
     flex: 1,
   },

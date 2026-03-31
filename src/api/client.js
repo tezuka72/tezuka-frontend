@@ -18,7 +18,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 60000,
 });
 
 // トークンをリクエストに自動付与するインターセプター
@@ -226,8 +226,8 @@ export const feedAPI = {
     const response = await api.get('/feed', { params: { limit, offset } });
     return response.data;
   },
-  getFollowingFeed: async () => {
-    const response = await api.get('/feed/following');
+  getFollowingFeed: async ({ limit = 10, offset = 0 } = {}) => {
+    const response = await api.get('/feed/following', { params: { limit, offset } });
     return response.data;
   },
   getTrending: async ({ limit = 30, timeframe = '7d' } = {}) => {
@@ -237,6 +237,10 @@ export const feedAPI = {
   search: async (q, limit = 20) => {
     const response = await api.get('/feed/search', { params: { q, limit } });
     return response.data; // { posts, query }
+  },
+  searchUsers: async (q, limit = 20) => {
+    const response = await api.get('/users/search', { params: { q, limit } });
+    return response.data; // { users }
   },
 };
 
@@ -497,6 +501,18 @@ export const messageAPI = {
       type,
       name,
     });
+    return response.data;
+  },
+  getChannels: async (groupId) => {
+    const response = await api.get(`/messages/conversations/${groupId}/channels`);
+    return response.data;
+  },
+  createChannel: async (groupId, name, description = null) => {
+    const response = await api.post(`/messages/conversations/${groupId}/channels`, { name, description });
+    return response.data;
+  },
+  joinChannel: async (groupId, channelId) => {
+    const response = await api.post(`/messages/conversations/${groupId}/channels/${channelId}/join`);
     return response.data;
   },
   getMessages: async (convId, before = null) => {

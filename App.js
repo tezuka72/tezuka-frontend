@@ -214,7 +214,15 @@ function AppNavigator() {
       <Stack.Screen
         name="PostDetail"
         component={PostDetailScreen}
-        options={{ headerShown: true, title: '投稿詳細' }}
+        options={({ navigation }) => ({
+          headerShown: true,
+          title: '投稿詳細',
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+          ),
+        })}
       />
       <Stack.Screen
         name="Series"
@@ -239,7 +247,14 @@ function AppNavigator() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ headerShown: true }}
+        options={({ navigation }) => ({
+          headerShown: true,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+          ),
+        })}
       />
       <Stack.Screen
         name="NewConversation"
@@ -284,7 +299,15 @@ function AppNavigator() {
       <Stack.Screen
         name="Search"
         component={SearchScreen}
-        options={{ headerShown: true, title: '検索' }}
+        options={({ navigation }) => ({
+          headerShown: true,
+          title: '検索',
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+          ),
+        })}
       />
       <Stack.Screen
         name="Analytics"

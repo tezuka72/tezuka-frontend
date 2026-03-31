@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, Dimensions,
@@ -41,6 +41,30 @@ function formatCount(n) {
   return String(n);
 }
 
+// ユーザー検索結果アイテム
+function UserCard({ item, onPress }) {
+  return (
+    <TouchableOpacity style={styles.userCard} onPress={onPress} activeOpacity={0.8}>
+      {item.avatar_url ? (
+        <Image source={{ uri: item.avatar_url }} style={styles.userAvatar} contentFit="cover" cachePolicy="memory-disk" />
+      ) : (
+        <View style={styles.userAvatarPlaceholder}>
+          <Text style={styles.userAvatarInitial}>{(item.display_name || item.username || '?')[0].toUpperCase()}</Text>
+        </View>
+      )}
+      <View style={styles.userInfo}>
+        <View style={styles.userNameRow}>
+          <Text style={styles.userDisplayName} numberOfLines={1}>{item.display_name || item.username}</Text>
+          {item.is_verified && <Text style={styles.verifiedBadge}> ✓</Text>}
+        </View>
+        <Text style={styles.userUsername} numberOfLines={1}>@{item.username}</Text>
+        {item.bio ? <Text style={styles.userBio} numberOfLines={1}>{item.bio}</Text> : null}
+      </View>
+      <Text style={styles.userFollowers}>{formatCount(item.follower_count || 0)}{'\n'}フォロワー</Text>
+    </TouchableOpacity>
+  );
+}
+
 // リスト形式の検索結果アイテム
 function PostCard({ item, onPress }) {
   const firstImage = item.thumbnail_url || item.images?.[0]?.image_url || item.images?.[0];
@@ -74,25 +98,25 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [query, setQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('posts'); // 'posts' | 'accounts'
   const [results, setResults] = useState([]);
+  const [userResults, setUserResults] = useState([]);
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(false);
   const [trendingLoading, setTrendingLoading] = useState(true);
   const [searched, setSearched] = useState(false);
 
-  // 画面を開いたらトレンドをロード
   useEffect(() => {
     (async () => {
       try {
         const data = await feedAPI.getTrending({ limit: 30 });
         setTrending(data.posts || []);
-      } catch (e) {
-        console.error('Trending load error:', e);
-      } finally {
-        setTrendingLoading(false);
-      }
+      } catch (e) {}
+      finally { setTrendingLoading(false); }
     })();
   }, []);
+
+  const debounceTimer = useRef(null);
 
   const doSearch = useCallback(async (q) => {
     const trimmed = q.trim();
@@ -100,25 +124,57 @@ export default function SearchScreen() {
     setLoading(true);
     setSearched(true);
     try {
-      const data = await feedAPI.search(trimmed);
-      setResults(data.posts || []);
+      const [postData, userData] = await Promise.all([
+        feedAPI.search(trimmed),
+        feedAPI.searchUsers(trimmed, 20),
+      ]);
+      setResults(postData.posts || []);
+      setUserResults(userData.users || []);
     } catch (e) {
       setResults([]);
+      setUserResults([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const handleSubmit = () => doSearch(query);
+  const handleChangeText = (text) => {
+    setQuery(text);
+    if (!text.trim()) {
+      setSearched(false);
+      setResults([]);
+      setUserResults([]);
+      clearTimeout(debounceTimer.current);
+      return;
+    }
+    // 400ms デバウンスでリアルタイム検索
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => doSearch(text), 400);
+  };
+
+  const handleSubmit = () => {
+    clearTimeout(debounceTimer.current);
+    doSearch(query);
+  };
 
   const handleClear = () => {
+    clearTimeout(debounceTimer.current);
     setQuery('');
     setResults([]);
+    setUserResults([]);
     setSearched(false);
   };
 
-  const showGrid = !searched && !loading;
-  const showResults = searched;
+  const isHashtagSearch = activeTab === 'posts' && query.startsWith('#');
+  const placeholder = activeTab === 'accounts'
+    ? 'ユーザー名・表示名で検索'
+    : '#ハッシュタグ または タイトル・作者名で検索';
+  const showGrid = !searched && !loading && activeTab === 'posts';
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (searched && query.trim()) doSearch(query);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -127,13 +183,16 @@ export default function SearchScreen() {
     >
       {/* 検索バー */}
       <View style={styles.searchBar}>
-        <Ionicons name="search-outline" size={20} color={Colors.muted} style={styles.searchIcon} />
+        {isHashtagSearch
+          ? <Text style={styles.hashtagIcon}>#</Text>
+          : <Ionicons name="search-outline" size={20} color={Colors.muted} style={styles.searchIcon} />
+        }
         <TextInput
           style={styles.searchInput}
           value={query}
-          onChangeText={setQuery}
+          onChangeText={handleChangeText}
           onSubmitEditing={handleSubmit}
-          placeholder="タイトル・作者名で検索"
+          placeholder={placeholder}
           placeholderTextColor={Colors.muted}
           returnKeyType="search"
           autoCapitalize="none"
@@ -146,29 +205,85 @@ export default function SearchScreen() {
         )}
       </View>
 
+      {/* タブ切り替え */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'posts' && styles.tabBtnActive]}
+          onPress={() => handleTabChange('posts')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="book-outline" size={15} color={activeTab === 'posts' ? Colors.primary : Colors.muted} />
+          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>投稿</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'accounts' && styles.tabBtnActive]}
+          onPress={() => handleTabChange('accounts')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="people-outline" size={15} color={activeTab === 'accounts' ? Colors.primary : Colors.muted} />
+          <Text style={[styles.tabText, activeTab === 'accounts' && styles.tabTextActive]}>アカウント</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} />
         </View>
-      ) : showResults ? (
-        results.length === 0 ? (
+      ) : activeTab === 'accounts' ? (
+        /* ── アカウントタブ ── */
+        !searched ? (
+          <View style={styles.center}>
+            <Ionicons name="people-outline" size={48} color={Colors.muted} />
+            <Text style={[styles.emptyText, { marginTop: 12 }]}>ユーザー名や表示名で検索してください</Text>
+          </View>
+        ) : userResults.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={styles.emptyText}>「{query}」に一致する投稿が見つかりませんでした</Text>
+            <Text style={styles.emptyText}>「{query}」のアカウントは見つかりませんでした</Text>
           </View>
         ) : (
           <FlatList
+            keyboardShouldPersistTaps="handled"
+            data={userResults}
+            keyExtractor={item => `user_${item.id}`}
+            renderItem={({ item }) => (
+              <UserCard
+                item={item}
+                onPress={() => navigation.navigate('UserProfile', { username: item.username })}
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            ListHeaderComponent={
+              <Text style={styles.sectionLabel}>{userResults.length}件のアカウント</Text>
+            }
+          />
+        )
+      ) : /* ── 投稿タブ ── */
+      searched ? (
+        results.length === 0 ? (
+          <View style={styles.center}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyText}>「{query}」に一致する投稿は見つかりませんでした</Text>
+          </View>
+        ) : (
+          <FlatList
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.list}
             data={results}
-            keyExtractor={item => String(item.id)}
+            keyExtractor={item => `post_${item.id}`}
             renderItem={({ item }) => (
               <PostCard
                 item={item}
                 onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
               />
             )}
-            contentContainerStyle={styles.list}
-            keyboardShouldPersistTaps="handled"
             ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListHeaderComponent={
+              <Text style={styles.sectionLabel}>
+                {isHashtagSearch ? `#${query.slice(1)} · ` : ''}{results.length}件の投稿
+              </Text>
+            }
           />
         )
       ) : showGrid ? (
@@ -190,9 +305,7 @@ export default function SearchScreen() {
             )}
             contentContainerStyle={styles.gridContainer}
             keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={
-              <Text style={styles.sectionLabel}>人気の投稿</Text>
-            }
+            ListHeaderComponent={<Text style={styles.sectionLabel}>人気の投稿</Text>}
           />
         )
       ) : null}
@@ -213,6 +326,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   searchIcon: { marginRight: 8 },
+  hashtagIcon: { fontSize: 20, fontWeight: '800', color: Colors.primary, marginRight: 8, lineHeight: 24 },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
@@ -220,9 +334,68 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   clearBtn: { padding: 4 },
+  tabRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabBtnActive: {
+    borderBottomColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.muted,
+  },
+  tabTextActive: {
+    color: Colors.primary,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyText: { color: Colors.muted, fontSize: 14, textAlign: 'center' },
+
+  // ユーザーカード
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.card,
+    gap: 12,
+  },
+  userAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.border,
+  },
+  userAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userAvatarInitial: { color: '#fff', fontWeight: 'bold', fontSize: 20 },
+  userInfo: { flex: 1 },
+  userNameRow: { flexDirection: 'row', alignItems: 'center' },
+  userDisplayName: { color: Colors.foreground, fontWeight: '700', fontSize: 15 },
+  verifiedBadge: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
+  userUsername: { color: Colors.muted, fontSize: 13, marginTop: 1 },
+  userBio: { color: Colors.muted, fontSize: 12, marginTop: 3 },
+  userFollowers: { color: Colors.muted, fontSize: 11, textAlign: 'center', lineHeight: 16 },
 
   // グリッド
   sectionLabel: {
