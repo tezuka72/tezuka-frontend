@@ -1,8 +1,8 @@
-// TEZUKA Design - Blue & Yellow Color Palette
+// TEZUKA Design - Light Theme
 export const Colors = {
-  // Background (dark navy)
-  background: '#06090F',
-  card: '#0F1724',
+  // Background (light)
+  background: '#F5F7FA',
+  card: '#FFFFFF',
 
   // Primary (Vivid Blue)
   primary: '#2563EB',
@@ -13,8 +13,8 @@ export const Colors = {
   accentLight: '#FFD640',
 
   // Text
-  foreground: '#F0F4FF',
-  muted: '#8894AA',
+  foreground: '#111827',
+  muted: '#6B7280',
 
   // Extended Palette
   rose: '#F25C5C',
@@ -26,8 +26,8 @@ export const Colors = {
   orange: '#F58A23',
 
   // Borders
-  border: '#1E2D47',
-  borderLight: '#253654',
+  border: '#E5E7EB',
+  borderLight: '#F3F4F6',
 
   // States
   success: '#34D399',

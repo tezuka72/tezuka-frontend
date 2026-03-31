@@ -71,7 +71,7 @@ function TabIcon({ name, focused }) {
     Ranking: focused ? 'trophy'  : 'trophy-outline',
     Profile: focused ? 'person'  : 'person-outline',
   };
-  const color = focused ? '#FFFFFF' : '#888888';
+  const color = focused ? '#2563EB' : '#9CA3AF';
   return (
     <View style={tabStyles.iconWrap}>
       <Ionicons name={iconMap[name] || 'apps-outline'} size={24} color={color} />
@@ -115,8 +115,8 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: true,
-        tabBarActiveTintColor: '#FFFFFF',
-        tabBarInactiveTintColor: '#888888',
+        tabBarActiveTintColor: '#2563EB',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: [
           tabStyles.tabBar,
           Platform.OS === 'web'
@@ -392,8 +392,9 @@ export default function App() {
 
 const tabStyles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#000',
-    borderTopWidth: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
     paddingTop: 4,
   },
   tabLabel: {

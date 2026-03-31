@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { feedAPI, postAPI, bookmarkAPI, adAPI } from '../api/client';
@@ -27,7 +28,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const HEADER_HEIGHT = 52;
 const TAB_BAR_HEIGHT = 60;
 const AUTHOR_H = 70;
-const FOOTER_H = 120;
+const FOOTER_H = 56;
 const REPOST_H = 36;
 const CARD_H_PADDING = 16; // カード上下の余白（前後カードが少し見える）
 
@@ -219,47 +220,60 @@ const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
           )}
         </TouchableOpacity>
 
-        {/* ─── サムネイル画像（残り全空間を使う） ─── */}
-        <TouchableWithoutFeedback onPress={handleTap}>
-          <View style={styles.imageWrap}>
-            {thumbUri ? (
-              <Image
-                source={{ uri: thumbUri }}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-                transition={80}
-                placeholder={{ color: Colors.border }}
-                cachePolicy="memory-disk"
-                priority="high"
-              />
-            ) : (
-              <View style={[StyleSheet.absoluteFill, styles.imagePlaceholder]}>
-                <Ionicons name="image-outline" size={48} color={Colors.muted} />
-              </View>
-            )}
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}
-            >
-              <Text style={styles.heartEmoji}>❤️</Text>
-            </Animated.View>
-            {pageCount > 1 && (
-              <View style={styles.pageBadge}>
-                <Ionicons name="images-outline" size={11} color="#fff" />
-                <Text style={styles.pageBadgeText}> {pageCount}P</Text>
-              </View>
-            )}
-          </View>
-        </TouchableWithoutFeedback>
+        {/* ─── サムネイル画像 + グラデーションオーバーレイ ─── */}
+        <View style={styles.imageContainer}>
+          <TouchableWithoutFeedback onPress={handleTap}>
+            <View style={StyleSheet.absoluteFill}>
+              {thumbUri ? (
+                <Image
+                  source={{ uri: thumbUri }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  transition={80}
+                  placeholder={{ color: Colors.border }}
+                  cachePolicy="memory-disk"
+                  priority="high"
+                />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.imagePlaceholder]}>
+                  <Ionicons name="image-outline" size={48} color={Colors.muted} />
+                </View>
+              )}
+              {thumbUri && (
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.78)']}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
+              )}
+              <Animated.View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}
+              >
+                <Text style={styles.heartEmoji}>❤️</Text>
+              </Animated.View>
+              {pageCount > 1 && (
+                <View style={styles.pageBadge}>
+                  <Ionicons name="images-outline" size={11} color="#fff" />
+                  <Text style={styles.pageBadgeText}> {pageCount}P</Text>
+                </View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
 
-        {/* ─── フッター（タイトル → 説明 → アクション） ─── */}
+          {/* タイトル・説明はグラデーション上に重ねる（TouchableWithoutFeedbackの外） */}
+          <View style={styles.titleOverlay} pointerEvents="box-none">
+            <TouchableOpacity onPress={() => navigation?.navigate('PostDetail', { postId: post.id })} activeOpacity={0.85}>
+              <Text style={styles.postTitleOverlay} numberOfLines={2}>{post.title}</Text>
+            </TouchableOpacity>
+            {post.description ? (
+              <Text style={styles.postDescOverlay} numberOfLines={1}>{post.description}</Text>
+            ) : null}
+          </View>
+        </View>
+
+        {/* ─── フッター（アクションバーのみ） ─── */}
         <View style={styles.footer}>
-          <TouchableOpacity onPress={() => navigation?.navigate('PostDetail', { postId: post.id })} activeOpacity={0.85}>
-            <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
-          </TouchableOpacity>
-          {post.description ? (
-            <Text style={styles.postDesc} numberOfLines={1}>{post.description}</Text>
-          ) : null}
           <View style={styles.actionBar}>
             <TouchableOpacity style={styles.actionBtn} onPress={handleLikeButton} activeOpacity={0.7}>
               <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#FF3B5C' : Colors.muted} />
@@ -753,14 +767,40 @@ const styles = StyleSheet.create({
   },
 
   // ---- 画像エリア（flex:1 で残りを全部使う） ----
-  imageWrap: {
+  imageContainer: {
     flex: 1,
-    backgroundColor: Colors.border,
+    position: 'relative',
     overflow: 'hidden',
   },
   imagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.border,
+  },
+  // タイトル・説明のオーバーレイ
+  titleOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    paddingTop: 40,
+  },
+  postTitleOverlay: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 24,
+    letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  postDescOverlay: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.78)',
+    marginTop: 4,
   },
   heartOverlay: {
     alignItems: 'center',
@@ -786,35 +826,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ---- フッター（固定高・タイトル→説明→アクション） ----
+  // ---- フッター（アクションバーのみ） ----
   footer: {
     height: FOOTER_H,
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-  },
-  postTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.foreground,
-    lineHeight: 21,
-  },
-  postDesc: {
-    fontSize: 13,
-    color: Colors.muted,
-    lineHeight: 18,
-    flex: 1,
-    marginTop: 2,
+    backgroundColor: Colors.card,
   },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
   },
 
   actionBtn: {
