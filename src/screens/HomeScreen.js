@@ -664,13 +664,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
 
-  // ---- 作品カード（角丸・左右余白） ----
+  // ---- 作品カード（マンガのコマ風・太枠） ----
   card: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 10,
     backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 3,
+    borderColor: Colors.foreground,
     overflow: 'hidden',
     flexDirection: 'column',
   },
@@ -814,14 +814,15 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopWidth: 3,
+    borderTopColor: Colors.foreground,
   },
   postTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: Colors.foreground,
-    lineHeight: 21,
+    lineHeight: 22,
+    letterSpacing: -0.3,
   },
   postDesc: {
     fontSize: 13,
@@ -851,17 +852,17 @@ const styles = StyleSheet.create({
     color: Colors.muted,
   },
 
-  // ❤ 思考バブル（雲形いいね）
+  // ❤ 思考バブル（雲形いいね）— でこぼこ感を強調
   cloudBubble: {
-    width: 40,
-    height: 34,
-    borderWidth: 3,
+    width: 46,
+    height: 40,
+    borderWidth: 3.5,
     borderColor: Colors.foreground,
-    borderRadius: 18,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 13,
-    borderBottomLeftRadius: 13,
-    borderBottomRightRadius: 21,
+    borderRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 14,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 26,
     backgroundColor: '#FEFCE8',
     alignItems: 'center',
     justifyContent: 'center',
@@ -871,15 +872,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0F3',
   },
   cloudIcon: {
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: 19,
+    lineHeight: 23,
     color: Colors.foreground,
   },
 
-  // !! スターバースト（爆発吹き出しコメント）
+  // !! スターバースト — burst2をborderRadius:0にして鋭い菱形の角を出す
   burstWrap: {
-    width: 42,
-    height: 42,
+    width: 50,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -888,35 +889,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   burst1: {
-    width: 30,
-    height: 30,
-    borderWidth: 3,
+    width: 34,
+    height: 34,
+    borderWidth: 3.5,
     borderColor: Colors.foreground,
     backgroundColor: '#FEFCE8',
-    borderRadius: 3,
+    borderRadius: 5,
   },
   burst2: {
-    width: 30,
-    height: 30,
-    borderWidth: 3,
+    width: 34,
+    height: 34,
+    borderWidth: 3.5,
     borderColor: Colors.foreground,
     backgroundColor: '#FEFCE8',
-    borderRadius: 3,
+    borderRadius: 0,
     transform: [{ rotate: '45deg' }],
   },
   bangText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '900',
     color: Colors.foreground,
-    letterSpacing: -2,
+    letterSpacing: 1,
     zIndex: 3,
   },
 
   // 🔖 短冊ブックマーク＋ハッチング
   ribbon: {
-    width: 26,
-    height: 36,
-    borderWidth: 3,
+    width: 30,
+    height: 42,
+    borderWidth: 3.5,
     borderColor: Colors.foreground,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
@@ -925,7 +926,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEFCE8',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 5,
     paddingVertical: 2,
   },
   ribbonActive: {
@@ -933,21 +934,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent + '18',
   },
   hatchLine: {
-    width: 13,
-    height: 2,
+    width: 15,
+    height: 2.5,
     backgroundColor: Colors.foreground,
     borderRadius: 1,
   },
 
   // 🔁 傾きフレームリポスト
   repostFrame: {
-    width: 36,
-    height: 30,
-    borderWidth: 3,
+    width: 42,
+    height: 36,
+    borderWidth: 3.5,
     borderColor: Colors.foreground,
     borderRadius: 5,
-    borderTopRightRadius: 13,
-    borderBottomLeftRadius: 13,
+    borderTopRightRadius: 15,
+    borderBottomLeftRadius: 15,
     backgroundColor: '#FEFCE8',
     alignItems: 'center',
     justifyContent: 'center',
@@ -956,10 +957,10 @@ const styles = StyleSheet.create({
 
   // 装飾
   starAccent: {
-    fontSize: 11,
+    fontSize: 13,
     color: Colors.muted,
     marginLeft: 2,
-    marginTop: -6,
+    marginTop: -8,
   },
 
   actionSpacer: {
