@@ -26,7 +26,10 @@ import { Colors } from '../theme/colors';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const HEADER_HEIGHT = 52;
 const TAB_BAR_HEIGHT = 60;
-const CARD_IMAGE_HEIGHT = 260;
+const AUTHOR_H = 70;
+const FOOTER_H = 120;
+const REPOST_H = 36;
+const CARD_H_PADDING = 16; // カード上下の余白（前後カードが少し見える）
 
 function formatCount(n) {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
@@ -35,15 +38,14 @@ function formatCount(n) {
 }
 
 // =====================
-// 投稿カード
+// 投稿カード（1画面1枚・スナップ）
 // =====================
-const PostItem = memo(function PostItem({ post, navigation }) {
+const PostItem = memo(function PostItem({ post, navigation, itemHeight }) {
   const [isLiked, setIsLiked] = useState(post.is_liked || false);
   const [likeCount, setLikeCount] = useState(post.like_count || 0);
   const [isBookmarked, setIsBookmarked] = useState(post.is_bookmarked || false);
   const [repostModalVisible, setRepostModalVisible] = useState(false);
 
-  // コメントシート
   const [commentVisible, setCommentVisible] = useState(false);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
@@ -152,128 +154,135 @@ const PostItem = memo(function PostItem({ post, navigation }) {
   const pageCount = parseInt(post.total_images) || images.length || 0;
   const avatarUri = post.avatar_url;
 
-  return (
-    <View style={styles.card}>
-      {/* ─── リポストバナー ─── */}
-      {post.feed_type === 'repost' && (
-        <TouchableOpacity
-          style={styles.repostBanner}
-          activeOpacity={0.7}
-          onPress={() => navigation?.navigate('UserProfile', { username: post.reposter_username })}
-        >
-          <Ionicons name="repeat" size={13} color={Colors.primary} />
-          <Text style={styles.repostBannerText}>
-            {' '}{post.reposter_name || post.reposter_username}さんがリポスト
-          </Text>
-        </TouchableOpacity>
-      )}
+  // カードの実高さ = ページ高さ - 上下余白
+  const cardHeight = itemHeight - CARD_H_PADDING;
 
-      {/* ─── 作者情報（上部・目立たせる） ─── */}
-      <TouchableOpacity
-        style={styles.authorSection}
-        onPress={() => navigation?.navigate('UserProfile', { username: post.creator_username || post.username })}
-        activeOpacity={0.8}
-      >
-        <View style={styles.authorAvatarWrap}>
-          {avatarUri ? (
-            <Image
-              source={{ uri: avatarUri }}
-              style={styles.authorAvatarImg}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-            />
-          ) : (
-            <View style={styles.authorAvatarFallback}>
-              <Text style={styles.authorAvatarText}>
-                {(post.creator_name || post.display_name || '?')[0].toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.authorInfo}>
-          <View style={styles.authorNameRow}>
-            <Text style={styles.authorDisplayName} numberOfLines={1}>
-              {post.creator_name || post.display_name || post.username}
+  return (
+    // ページ区切り用コンテナ（透明・itemHeight と同じ高さ）
+    <View style={{ height: itemHeight, paddingHorizontal: 12, paddingTop: CARD_H_PADDING / 2, paddingBottom: CARD_H_PADDING / 2 }}>
+      <View style={[styles.card, { height: cardHeight }]}>
+
+        {/* ─── リポストバナー ─── */}
+        {post.feed_type === 'repost' && (
+          <TouchableOpacity
+            style={styles.repostBanner}
+            activeOpacity={0.7}
+            onPress={() => navigation?.navigate('UserProfile', { username: post.reposter_username })}
+          >
+            <Ionicons name="repeat" size={13} color={Colors.primary} />
+            <Text style={styles.repostBannerText}>
+              {' '}{post.reposter_name || post.reposter_username}さんがリポスト
             </Text>
-            {post.is_verified && (
-              <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={{ marginLeft: 3 }} />
+          </TouchableOpacity>
+        )}
+
+        {/* ─── 作者情報（上部） ─── */}
+        <TouchableOpacity
+          style={styles.authorSection}
+          onPress={() => navigation?.navigate('UserProfile', { username: post.creator_username || post.username })}
+          activeOpacity={0.8}
+        >
+          <View style={styles.authorAvatarWrap}>
+            {avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.authorAvatarImg}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <View style={styles.authorAvatarFallback}>
+                <Text style={styles.authorAvatarText}>
+                  {(post.creator_name || post.display_name || '?')[0].toUpperCase()}
+                </Text>
+              </View>
             )}
           </View>
-          <Text style={styles.authorUsername} numberOfLines={1}>
-            @{post.creator_username || post.username}
-          </Text>
-        </View>
-        {post.series_title && (
-          <View style={styles.seriesPill}>
-            <Ionicons name="book-outline" size={11} color={Colors.primary} />
-            <Text style={styles.seriesPillText} numberOfLines={1}> {post.series_title}</Text>
+          <View style={styles.authorInfo}>
+            <View style={styles.authorNameRow}>
+              <Text style={styles.authorDisplayName} numberOfLines={1}>
+                {post.creator_name || post.display_name || post.username}
+              </Text>
+              {post.is_verified && (
+                <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={{ marginLeft: 3 }} />
+              )}
+            </View>
+            <Text style={styles.authorUsername} numberOfLines={1}>
+              @{post.creator_username || post.username}
+            </Text>
           </View>
-        )}
-      </TouchableOpacity>
-
-      {/* ─── サムネイル画像（固定高・カード内） ─── */}
-      <TouchableWithoutFeedback onPress={handleTap}>
-        <View style={styles.imageWrap}>
-          {thumbUri ? (
-            <Image
-              source={{ uri: thumbUri }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              transition={80}
-              placeholder={{ color: Colors.border }}
-              cachePolicy="memory-disk"
-              priority="high"
-            />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, styles.imagePlaceholder]}>
-              <Ionicons name="image-outline" size={48} color={Colors.muted} />
+          {post.series_title && (
+            <View style={styles.seriesPill}>
+              <Ionicons name="book-outline" size={11} color={Colors.primary} />
+              <Text style={styles.seriesPillText} numberOfLines={1}> {post.series_title}</Text>
             </View>
           )}
-          <Animated.View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}
-          >
-            <Text style={styles.heartEmoji}>❤️</Text>
-          </Animated.View>
-          {pageCount > 1 && (
-            <View style={styles.pageBadge}>
-              <Ionicons name="images-outline" size={11} color="#fff" />
-              <Text style={styles.pageBadgeText}> {pageCount}P</Text>
-            </View>
-          )}
-        </View>
-      </TouchableWithoutFeedback>
-
-      {/* ─── フッター（タイトル → 説明 → アクション） ─── */}
-      <View style={styles.footer}>
-        <TouchableOpacity onPress={() => navigation?.navigate('PostDetail', { postId: post.id })} activeOpacity={0.85}>
-          <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
         </TouchableOpacity>
-        {post.description ? (
-          <Text style={styles.postDesc} numberOfLines={2}>{post.description}</Text>
-        ) : null}
-        {/* アクションバー */}
-        <View style={styles.actionBar}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleLikeButton} activeOpacity={0.7}>
-            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#FF3B5C' : Colors.muted} />
-            <Text style={[styles.actionCount, isLiked && { color: '#FF3B5C' }]}>{formatCount(likeCount)}</Text>
+
+        {/* ─── サムネイル画像（残り全空間を使う） ─── */}
+        <TouchableWithoutFeedback onPress={handleTap}>
+          <View style={styles.imageWrap}>
+            {thumbUri ? (
+              <Image
+                source={{ uri: thumbUri }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={80}
+                placeholder={{ color: Colors.border }}
+                cachePolicy="memory-disk"
+                priority="high"
+              />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, styles.imagePlaceholder]}>
+                <Ionicons name="image-outline" size={48} color={Colors.muted} />
+              </View>
+            )}
+            <Animated.View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}
+            >
+              <Text style={styles.heartEmoji}>❤️</Text>
+            </Animated.View>
+            {pageCount > 1 && (
+              <View style={styles.pageBadge}>
+                <Ionicons name="images-outline" size={11} color="#fff" />
+                <Text style={styles.pageBadgeText}> {pageCount}P</Text>
+              </View>
+            )}
+          </View>
+        </TouchableWithoutFeedback>
+
+        {/* ─── フッター（タイトル → 説明 → アクション） ─── */}
+        <View style={styles.footer}>
+          <TouchableOpacity onPress={() => navigation?.navigate('PostDetail', { postId: post.id })} activeOpacity={0.85}>
+            <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={openComments} activeOpacity={0.7}>
-            <Ionicons name="chatbubble-outline" size={19} color={Colors.muted} />
-            <Text style={styles.actionCount}>{formatCount(commentCount)}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleBookmark} activeOpacity={0.7}>
-            <Ionicons name={isBookmarked ? 'bookmark' : 'bookmark-outline'} size={19} color={isBookmarked ? Colors.accent : Colors.muted} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setRepostModalVisible(true)} activeOpacity={0.7}>
-            <Ionicons name="repeat" size={20} color={Colors.muted} />
-          </TouchableOpacity>
-          <View style={styles.actionSpacer} />
-          <View style={styles.viewRow}>
-            <Ionicons name="eye-outline" size={14} color={Colors.muted} />
-            <Text style={styles.viewCount}>{formatCount(post.view_count)}</Text>
+          {post.description ? (
+            <Text style={styles.postDesc} numberOfLines={1}>{post.description}</Text>
+          ) : null}
+          <View style={styles.actionBar}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleLikeButton} activeOpacity={0.7}>
+              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={21} color={isLiked ? '#FF3B5C' : Colors.muted} />
+              <Text style={[styles.actionCount, isLiked && { color: '#FF3B5C' }]}>{formatCount(likeCount)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={openComments} activeOpacity={0.7}>
+              <Ionicons name="chatbubble-outline" size={20} color={Colors.muted} />
+              <Text style={styles.actionCount}>{formatCount(commentCount)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleBookmark} activeOpacity={0.7}>
+              <Ionicons name={isBookmarked ? 'bookmark' : 'bookmark-outline'} size={20} color={isBookmarked ? Colors.accent : Colors.muted} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setRepostModalVisible(true)} activeOpacity={0.7}>
+              <Ionicons name="repeat" size={21} color={Colors.muted} />
+            </TouchableOpacity>
+            <View style={styles.actionSpacer} />
+            <View style={styles.viewRow}>
+              <Ionicons name="eye-outline" size={14} color={Colors.muted} />
+              <Text style={styles.viewCount}>{formatCount(post.view_count)}</Text>
+            </View>
           </View>
         </View>
+
       </View>
 
       <RepostModal
@@ -349,26 +358,29 @@ const PostItem = memo(function PostItem({ post, navigation }) {
 // =====================
 // 広告カード
 // =====================
-const AdItem = memo(function AdItem({ ad }) {
+const AdItem = memo(function AdItem({ ad, itemHeight }) {
+  const cardHeight = itemHeight - CARD_H_PADDING;
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={{ height: itemHeight, paddingHorizontal: 12, paddingTop: CARD_H_PADDING / 2, paddingBottom: CARD_H_PADDING / 2 }}
       activeOpacity={0.95}
       onPress={() => ad.target_url && Linking.openURL(ad.target_url).catch(() => {})}
     >
-      <View style={styles.adBanner}>
-        <Text style={styles.adBannerText}>スポンサード</Text>
-      </View>
-      <View style={styles.imageWrap}>
-        {ad.image_url ? (
-          <Image source={{ uri: ad.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.imagePlaceholder]} />
-        )}
-      </View>
-      <View style={styles.footer}>
-        <Text style={styles.postTitle} numberOfLines={2}>{ad.title}</Text>
-        <Text style={styles.postDesc}>タップして詳細を見る →</Text>
+      <View style={[styles.card, { height: cardHeight }]}>
+        <View style={styles.adBanner}>
+          <Text style={styles.adBannerText}>スポンサード</Text>
+        </View>
+        <View style={styles.imageWrap}>
+          {ad.image_url ? (
+            <Image source={{ uri: ad.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.imagePlaceholder]} />
+          )}
+        </View>
+        <View style={styles.footer}>
+          <Text style={styles.postTitle} numberOfLines={2}>{ad.title}</Text>
+          <Text style={styles.postDesc}>タップして詳細を見る →</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -381,6 +393,7 @@ export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('recommend');
+  const [listHeight, setListHeight] = useState(0);
 
   const [posts, setPosts] = useState([]);
   const [ad, setAd] = useState(null);
@@ -398,6 +411,10 @@ export default function HomeScreen({ navigation }) {
   const followingOffsetRef = useRef(0);
 
   const FEED_LIMIT = 10;
+  const WEB_OFFSET = Platform.OS === 'web' ? TAB_BAR_HEIGHT : 0;
+  const itemHeight = listHeight > 0
+    ? listHeight - WEB_OFFSET
+    : SCREEN_HEIGHT - insets.top - HEADER_HEIGHT - TAB_BAR_HEIGHT - insets.bottom;
 
   useEffect(() => {
     loadPosts();
@@ -472,14 +489,19 @@ export default function HomeScreen({ navigation }) {
 
   const renderItem = useCallback(
     ({ item }) => item._isAd
-      ? <AdItem ad={item} />
-      : <PostItem post={item} navigation={navigation} />,
-    [navigation]
+      ? <AdItem ad={item} itemHeight={itemHeight} />
+      : <PostItem post={item} navigation={navigation} itemHeight={itemHeight} />,
+    [navigation, itemHeight]
   );
 
   const renderFollowingItem = useCallback(
-    ({ item }) => <PostItem post={item} navigation={navigation} />,
-    [navigation]
+    ({ item }) => <PostItem post={item} navigation={navigation} itemHeight={itemHeight} />,
+    [navigation, itemHeight]
+  );
+
+  const getItemLayout = useCallback(
+    (_, index) => ({ length: itemHeight, offset: itemHeight * index, index }),
+    [itemHeight]
   );
 
   if (error && posts.length === 0) {
@@ -515,52 +537,60 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* 発見フィード */}
-      {activeTab === 'recommend' && (
-        <FlatList
-          data={feedItems}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={3}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          removeClippedSubviews
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
-          onEndReached={loadMorePosts}
-          onEndReachedThreshold={0.5}
-          contentContainerStyle={styles.listContent}
-          style={{ flex: 1 }}
-        />
-      )}
-
-      {/* フォローフィード */}
-      {activeTab === 'following' && (
-        followingPosts.length === 0 && followingLoaded ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📖</Text>
-            <Text style={styles.emptyTitle}>フォロー中のユーザーの投稿がまだありません</Text>
-          </View>
-        ) : (
+      {/* フィード */}
+      <View
+        style={{ flex: 1 }}
+        onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}
+      >
+        {activeTab === 'recommend' && itemHeight > 0 && (
           <FlatList
-            data={followingPosts}
-            keyExtractor={(item) => `f_${item.id}`}
-            renderItem={renderFollowingItem}
+            data={feedItems}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            pagingEnabled
             showsVerticalScrollIndicator={false}
-            initialNumToRender={3}
-            maxToRenderPerBatch={3}
-            windowSize={5}
+            decelerationRate="fast"
+            getItemLayout={getItemLayout}
+            initialNumToRender={1}
+            maxToRenderPerBatch={2}
+            windowSize={3}
             removeClippedSubviews
-            onRefresh={handleFollowingRefresh}
-            refreshing={followingRefreshing}
-            onEndReached={loadMoreFollowingPosts}
+            onRefresh={handleRefresh}
+            refreshing={refreshing}
+            onEndReached={loadMorePosts}
             onEndReachedThreshold={0.5}
-            contentContainerStyle={styles.listContent}
-            style={{ flex: 1 }}
+            style={{ height: itemHeight, flex: undefined }}
           />
-        )
-      )}
+        )}
+
+        {activeTab === 'following' && (
+          followingPosts.length === 0 && followingLoaded ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>📖</Text>
+              <Text style={styles.emptyTitle}>フォロー中のユーザーの投稿がまだありません</Text>
+            </View>
+          ) : itemHeight > 0 ? (
+            <FlatList
+              data={followingPosts}
+              keyExtractor={(item) => `f_${item.id}`}
+              renderItem={renderFollowingItem}
+              pagingEnabled
+              showsVerticalScrollIndicator={false}
+              decelerationRate="fast"
+              getItemLayout={getItemLayout}
+              initialNumToRender={1}
+              maxToRenderPerBatch={2}
+              windowSize={3}
+              removeClippedSubviews
+              onRefresh={handleFollowingRefresh}
+              refreshing={followingRefreshing}
+              onEndReached={loadMoreFollowingPosts}
+              onEndReachedThreshold={0.5}
+              style={{ height: itemHeight, flex: undefined }}
+            />
+          ) : null
+        )}
+      </View>
     </View>
   );
 }
@@ -609,21 +639,15 @@ const styles = StyleSheet.create({
     padding: 4,
   },
 
-  // ---- リストコンテナ ----
-  listContent: {
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-
-  // ---- 作品カード ----
+  // ---- 作品カード（角丸・左右余白） ----
   card: {
-    marginHorizontal: 12,
-    marginBottom: 12,
+    flex: 1,
     borderRadius: 16,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
+    flexDirection: 'column',
   },
 
   // リポストバナー
@@ -635,6 +659,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    height: REPOST_H,
   },
   repostBannerText: {
     color: Colors.primary,
@@ -658,36 +683,37 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ---- 作者セクション ----
+  // ---- 作者セクション（固定高） ----
   authorSection: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 10,
+    height: AUTHOR_H,
   },
   authorAvatarWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
   },
   authorAvatarImg: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   authorAvatarFallback: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   authorAvatarText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
   },
   authorInfo: {
@@ -722,9 +748,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ---- 画像エリア（固定高） ----
+  // ---- 画像エリア（flex:1 で残りを全部使う） ----
   imageWrap: {
-    height: CARD_IMAGE_HEIGHT,
+    flex: 1,
     backgroundColor: Colors.border,
     overflow: 'hidden',
   },
@@ -756,12 +782,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ---- フッター（タイトル → 説明 → アクション） ----
+  // ---- フッター（固定高・タイトル→説明→アクション） ----
   footer: {
+    height: FOOTER_H,
     paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    gap: 5,
+    paddingTop: 10,
+    paddingBottom: 10,
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   postTitle: {
     fontSize: 15,
@@ -773,12 +802,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.muted,
     lineHeight: 18,
+    flex: 1,
+    marginTop: 2,
   },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
