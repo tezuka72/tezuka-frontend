@@ -273,6 +273,10 @@ export default function ProfileScreen({ route, navigation }) {
       const response = await userAPI.getProfile(username);
       setProfile(response.user);
       setIsFollowing(response.user?.is_following ?? false);
+      // 他人のプロフィール閲覧時に足跡を記録（通知送信）
+      if (currentUser?.username && currentUser.username !== username) {
+        userAPI.recordProfileView(username);
+      }
     } catch (e) {
       console.error('Load profile error:', e);
       setError(t('profile.loadError'));

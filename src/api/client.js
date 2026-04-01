@@ -93,6 +93,13 @@ export const userAPI = {
     const response = await api.get(`/users/${userId}`);
     return response.data;
   },
+  recordProfileView: async (username) => {
+    await api.post(`/users/${username}/view`).catch(() => {});
+  },
+  getVisitors: async () => {
+    const response = await api.get('/users/me/visitors');
+    return response.data;
+  },
   getUserPosts: async (username) => {
     const response = await api.get(`/users/${username}/posts`);
     return response.data; // { posts: [...] }
