@@ -366,7 +366,7 @@ export default function ChatScreen() {
     setSending(true);
     try {
       const data = await messageAPI.sendMessageWithImage(
-        conversation.id,
+        currentConvId,
         asset.uri,
         asset.file || null,
         text.trim() || null,
