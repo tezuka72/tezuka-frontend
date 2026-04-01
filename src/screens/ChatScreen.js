@@ -248,17 +248,18 @@ export default function ChatScreen() {
       ]);
       const fresh = msgData.messages || [];
       if (fresh.length > 0) {
-        const latestId = fresh[fresh.length - 1].id;
-        if (latestId !== newestIdRef.current) {
-          setMessages(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const newOnes = fresh.filter(m => !existingIds.has(m.id));
-            if (newOnes.length === 0) return prev;
-            newestIdRef.current = latestId;
-            return [...prev, ...newOnes];
-          });
-          messageAPI.markRead(currentConvId).catch(() => {});
-        }
+        // latestId による最適化チェックを廃止:
+        // 自分が送ったメッセージ(高ID)が newestIdRef に設定された後、
+        // それより前に送られた相手のメッセージ(低ID)を見逃すバグを修正。
+        // 毎回 existingIds で差分チェックするため re-render は新着時のみ発生。
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newOnes = fresh.filter(m => !existingIds.has(m.id));
+          if (newOnes.length === 0) return prev; // 新着なし→再描画なし
+          newestIdRef.current = fresh[fresh.length - 1].id;
+          return [...prev, ...newOnes];
+        });
+        messageAPI.markRead(currentConvId).catch(() => {});
       }
       setReaders(readersData.readers || []);
     } catch {}
