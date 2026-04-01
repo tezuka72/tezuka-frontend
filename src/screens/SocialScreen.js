@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  RefreshControl, ActivityIndicator,
+  RefreshControl, ActivityIndicator, Modal, TextInput,
+  KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,13 @@ function timeAgo(dateStr) {
   if (diff < 3600) return `${Math.floor(diff / 60)}分前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}時間前`;
   return `${Math.floor(diff / 86400)}日前`;
+}
+
+const ROOM_COLORS = [Colors.primary, Colors.violet, Colors.cyan, Colors.emerald, Colors.orange, Colors.rose];
+function roomColor(name = '') {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
+  return ROOM_COLORS[hash % ROOM_COLORS.length];
 }
 
 // ─── フォロー中フィード：投稿カード ──────────────────────
@@ -84,7 +92,7 @@ function Avatar({ uri, name, size = 44 }) {
 // ─── メッセージ：会話アイテム ─────────────────────────────
 function ConversationItem({ item, currentUserId, onPress }) {
   const others = item.other_participants || [];
-  const isGroup = item.type === 'group';
+  const isGroup = item.type === 'group' || item.type === 'open';
   const displayName = isGroup
     ? (item.name || others.map(u => u.display_name || u.username).join(', '))
     : (others[0]?.display_name || others[0]?.username || '?');
@@ -99,8 +107,8 @@ function ConversationItem({ item, currentUserId, onPress }) {
       <View style={styles.convAvatarWrap}>
         <Avatar uri={avatarUri} name={displayName} size={54} />
         {isGroup && (
-          <View style={styles.groupBadge}>
-            <Ionicons name="people" size={11} color="#fff" />
+          <View style={[styles.groupBadge, item.type === 'open' && { backgroundColor: Colors.cyan }]}>
+            <Ionicons name={item.type === 'open' ? 'earth' : 'people'} size={11} color="#fff" />
           </View>
         )}
       </View>
@@ -126,13 +134,119 @@ function ConversationItem({ item, currentUserId, onPress }) {
   );
 }
 
+// ─── オープンチャット：ルームアイテム ────────────────────
+function RoomItem({ item, onJoin, onEnter, joining }) {
+  const color = roomColor(item.name);
+  const memberCount = parseInt(item.member_count) || 0;
+  const isMember = item.is_member;
+
+  return (
+    <View style={styles.roomItem}>
+      <View style={[styles.roomAvatar, { backgroundColor: color }]}>
+        <Text style={styles.roomAvatarText}>{(item.name || '?')[0].toUpperCase()}</Text>
+      </View>
+      <View style={styles.roomBody}>
+        <Text style={styles.roomName} numberOfLines={1}>{item.name}</Text>
+        {item.description ? (
+          <Text style={styles.roomDesc} numberOfLines={1}>{item.description}</Text>
+        ) : null}
+        <View style={styles.roomMeta}>
+          <Ionicons name="people-outline" size={12} color={Colors.muted} />
+          <Text style={styles.roomMetaText}>{memberCount}人参加中</Text>
+          {item.last_message_created_at && (
+            <Text style={styles.roomMetaTime}>· {timeAgo(item.last_message_created_at)}</Text>
+          )}
+        </View>
+      </View>
+      <TouchableOpacity
+        style={[styles.roomBtn, isMember && styles.roomBtnEnter]}
+        onPress={isMember ? onEnter : onJoin}
+        disabled={joining}
+        activeOpacity={0.8}
+      >
+        {joining ? (
+          <ActivityIndicator size="small" color={isMember ? Colors.primary : '#fff'} />
+        ) : (
+          <Text style={[styles.roomBtnText, isMember && styles.roomBtnTextEnter]}>
+            {isMember ? 'チャット' : '参加'}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── ルーム作成モーダル ───────────────────────────────────
+function CreateRoomModal({ visible, onClose, onCreate }) {
+  const [name, setName] = useState('');
+  const [desc, setDesc] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      await onCreate(name.trim(), desc.trim() || null);
+      setName('');
+      setDesc('');
+      onClose();
+    } catch {
+      Alert.alert('エラー', 'ルームの作成に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>オープンチャットを作成</Text>
+          <Text style={styles.modalLabel}>ルーム名 *</Text>
+          <TextInput
+            style={styles.modalInput}
+            placeholder="例：漫画好き集まれ！"
+            placeholderTextColor={Colors.muted}
+            value={name}
+            onChangeText={setName}
+            maxLength={50}
+          />
+          <Text style={styles.modalLabel}>説明（任意）</Text>
+          <TextInput
+            style={[styles.modalInput, { height: 72, textAlignVertical: 'top' }]}
+            placeholder="ルームの説明を入力..."
+            placeholderTextColor={Colors.muted}
+            value={desc}
+            onChangeText={setDesc}
+            maxLength={100}
+            multiline
+          />
+          <TouchableOpacity
+            style={[styles.modalCreateBtn, (!name.trim() || loading) && { opacity: 0.5 }]}
+            onPress={handleCreate}
+            disabled={!name.trim() || loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.modalCreateBtnText}>作成する</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ─── メイン画面 ───────────────────────────────────────────
 export default function SocialScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { user } = useAuth();
   const navigation = useNavigation();
-  const [tab, setTab] = useState('friends'); // 'friends' | 'messages'
+  const [tab, setTab] = useState('friends'); // 'friends' | 'messages' | 'open'
 
   // フォロー中フィード
   const [posts, setPosts] = useState([]);
@@ -144,6 +258,14 @@ export default function SocialScreen() {
   const [convLoading, setConvLoading] = useState(true);
   const [convRefreshing, setConvRefreshing] = useState(false);
   const [convError, setConvError] = useState('');
+
+  // オープンチャット
+  const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [roomsRefreshing, setRoomsRefreshing] = useState(false);
+  const [roomsError, setRoomsError] = useState('');
+  const [joiningId, setJoiningId] = useState(null);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
 
   const loadPosts = useCallback(async () => {
     try {
@@ -168,12 +290,26 @@ export default function SocialScreen() {
     }
   }, []);
 
+  const loadRooms = useCallback(async () => {
+    try {
+      setRoomsError('');
+      const data = await messageAPI.getPublicRooms();
+      setRooms(data.rooms || []);
+    } catch {
+      setRoomsError('ルームの読み込みに失敗しました');
+    } finally {
+      setRoomsLoading(false);
+      setRoomsRefreshing(false);
+    }
+  }, []);
+
   useFocusEffect(useCallback(() => {
     loadPosts();
-    // 初回のみローディング表示（再フォーカス時は既存データを維持）
     if (conversations.length === 0) setConvLoading(true);
     loadConversations();
-  }, [loadPosts, loadConversations]));
+    if (rooms.length === 0) setRoomsLoading(true);
+    loadRooms();
+  }, [loadPosts, loadConversations, loadRooms]));
 
   const handleLike = async (postId) => {
     try {
@@ -187,6 +323,44 @@ export default function SocialScreen() {
     } catch {}
   };
 
+  const handleJoinRoom = async (room) => {
+    setJoiningId(room.id);
+    try {
+      await messageAPI.joinRoom(room.id);
+      setRooms(prev => prev.map(r => r.id === room.id ? { ...r, is_member: true, member_count: parseInt(r.member_count) + 1 } : r));
+      // 参加後すぐにチャット画面へ
+      const convObj = { id: room.id, type: 'open', name: room.name, other_participants: [] };
+      navigation.navigate('Chat', { conversation: convObj });
+    } catch {
+      Alert.alert('エラー', '参加に失敗しました');
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  const handleEnterRoom = (room) => {
+    const convObj = { id: room.id, type: 'open', name: room.name, other_participants: [] };
+    navigation.navigate('Chat', { conversation: convObj });
+  };
+
+  const handleCreateRoom = async (name, description) => {
+    const data = await messageAPI.createPublicRoom(name, description);
+    const newRoom = {
+      id: data.conversation_id,
+      name,
+      description,
+      type: 'open',
+      is_member: true,
+      member_count: 1,
+      last_message_content: null,
+      last_message_created_at: null,
+    };
+    setRooms(prev => [newRoom, ...prev]);
+    // 作成後すぐにチャット画面へ
+    const convObj = { id: data.conversation_id, type: 'open', name, other_participants: [] };
+    navigation.navigate('Chat', { conversation: convObj });
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ヘッダー */}
@@ -198,12 +372,12 @@ export default function SocialScreen() {
           >
             <Ionicons
               name={tab === 'friends' ? 'people' : 'people-outline'}
-              size={16}
+              size={15}
               color={tab === 'friends' ? Colors.primary : Colors.muted}
-              style={{ marginRight: 6 }}
+              style={{ marginRight: 4 }}
             />
             <Text style={[styles.segmentText, tab === 'friends' && styles.segmentTextActive]}>
-              フォロー中
+              フォロー
             </Text>
           </TouchableOpacity>
 
@@ -213,12 +387,27 @@ export default function SocialScreen() {
           >
             <Ionicons
               name={tab === 'messages' ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'}
-              size={16}
+              size={15}
               color={tab === 'messages' ? Colors.primary : Colors.muted}
-              style={{ marginRight: 6 }}
+              style={{ marginRight: 4 }}
             />
             <Text style={[styles.segmentText, tab === 'messages' && styles.segmentTextActive]}>
-              メッセージ
+              DM
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, tab === 'open' && styles.segmentActive]}
+            onPress={() => setTab('open')}
+          >
+            <Ionicons
+              name={tab === 'open' ? 'earth' : 'earth-outline'}
+              size={15}
+              color={tab === 'open' ? Colors.primary : Colors.muted}
+              style={{ marginRight: 4 }}
+            />
+            <Text style={[styles.segmentText, tab === 'open' && styles.segmentTextActive]}>
+              オープン
             </Text>
           </TouchableOpacity>
         </View>
@@ -226,6 +415,11 @@ export default function SocialScreen() {
         {tab === 'messages' && (
           <TouchableOpacity style={styles.newBtn} onPress={() => navigation.navigate('NewConversation')}>
             <Ionicons name="create-outline" size={24} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+        {tab === 'open' && (
+          <TouchableOpacity style={styles.newBtn} onPress={() => setCreateModalVisible(true)}>
+            <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
           </TouchableOpacity>
         )}
       </View>
@@ -271,7 +465,7 @@ export default function SocialScreen() {
         )
       )}
 
-      {/* メッセージタブ */}
+      {/* DMタブ */}
       {tab === 'messages' && (
         convLoading ? (
           <View style={styles.center}>
@@ -315,6 +509,60 @@ export default function SocialScreen() {
           />
         )
       )}
+
+      {/* オープンチャットタブ */}
+      {tab === 'open' && (
+        roomsLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
+        ) : roomsError ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{roomsError}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={loadRooms}>
+              <Text style={styles.retryText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={rooms}
+            keyExtractor={item => String(item.id)}
+            renderItem={({ item }) => (
+              <RoomItem
+                item={item}
+                onJoin={() => handleJoinRoom(item)}
+                onEnter={() => handleEnterRoom(item)}
+                joining={joiningId === item.id}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.emptyIcon}>🌐</Text>
+                <Text style={styles.emptyTitle}>まだルームがありません</Text>
+                <Text style={styles.emptySubtext}>最初のオープンチャットを作ってみましょう！</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => setCreateModalVisible(true)}>
+                  <Text style={styles.retryText}>ルームを作成</Text>
+                </TouchableOpacity>
+              </View>
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={roomsRefreshing}
+                onRefresh={() => { setRoomsRefreshing(true); loadRooms(); }}
+                tintColor={Colors.primary}
+              />
+            }
+            contentContainerStyle={rooms.length === 0 ? { flex: 1 } : { paddingVertical: 8 }}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+        )
+      )}
+
+      <CreateRoomModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onCreate={handleCreateRoom}
+      />
     </View>
   );
 }
@@ -357,7 +605,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: Colors.muted,
   },
@@ -438,4 +686,99 @@ const styles = StyleSheet.create({
   },
   unreadText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   separator: { height: 1, backgroundColor: Colors.border, marginLeft: 82 },
+
+  // オープンチャット：ルームアイテム
+  roomItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  roomAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  roomAvatarText: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  roomBody: { flex: 1, marginRight: 10 },
+  roomName: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 2 },
+  roomDesc: { fontSize: 12, color: Colors.muted, marginBottom: 4 },
+  roomMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  roomMetaText: { fontSize: 11, color: Colors.muted },
+  roomMetaTime: { fontSize: 11, color: Colors.muted },
+  roomBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    minWidth: 58,
+    alignItems: 'center',
+  },
+  roomBtnEnter: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  roomBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  roomBtnTextEnter: { color: Colors.primary },
+
+  // モーダル
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.foreground,
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.muted,
+    marginBottom: 6,
+  },
+  modalInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.foreground,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalCreateBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  modalCreateBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

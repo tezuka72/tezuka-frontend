@@ -515,6 +515,18 @@ export const messageAPI = {
     const response = await api.post(`/messages/conversations/${groupId}/channels/${channelId}/join`);
     return response.data;
   },
+  getPublicRooms: async () => {
+    const response = await api.get('/messages/conversations/public');
+    return response.data;
+  },
+  createPublicRoom: async (name, description = null) => {
+    const response = await api.post('/messages/conversations/public', { name, description });
+    return response.data;
+  },
+  joinRoom: async (convId) => {
+    const response = await api.post(`/messages/conversations/${convId}/join`);
+    return response.data;
+  },
   getMessages: async (convId, before = null) => {
     const params = { limit: 30 };
     if (before) params.before = before;

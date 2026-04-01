@@ -130,7 +130,7 @@ export default function ChatScreen() {
   const newestIdRef = useRef(null); // 最も新しいメッセージID（ポーリング用）
 
   // チャンネル関連
-  const isGroup = conversation.type === 'group' && !conversation.parent_id;
+  const isGroup = (conversation.type === 'group' || conversation.type === 'open') && !conversation.parent_id;
   const [channels, setChannels] = useState([]);
   const [activeChannelId, setActiveChannelId] = useState(null); // nullはグループ本体
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -141,7 +141,7 @@ export default function ChatScreen() {
   // 会話タイトルをヘッダーに設定
   useEffect(() => {
     const others = conversation.other_participants || [];
-    const title = conversation.type === 'group'
+    const title = (conversation.type === 'group' || conversation.type === 'open')
       ? (conversation.name || others.map(u => u.display_name || u.username).join(', '))
       : (others[0]?.display_name || others[0]?.username || 'DM');
     navigation.setOptions({
