@@ -397,17 +397,21 @@ export default function PostDetailScreen({ route, navigation }) {
           <View style={styles.content}>
             <TouchableOpacity
               style={styles.header}
-              onPress={() => navigation?.navigate('UserProfile', { username: post.creator_username })}
+              onPress={() => navigation?.navigate('UserProfile', { username: post.creator_username || post.username })}
               activeOpacity={0.7}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {post.creator_name?.[0]?.toUpperCase() || '?'}
-                </Text>
-              </View>
+              {post.avatar_url ? (
+                <Image source={{ uri: post.avatar_url }} style={styles.avatarImg} contentFit="cover" />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {(post.creator_name || post.display_name)?.[0]?.toUpperCase() || '?'}
+                  </Text>
+                </View>
+              )}
               <View>
-                <Text style={styles.displayName}>{post.creator_name}</Text>
-                <Text style={styles.username}>@{post.creator_username}</Text>
+                <Text style={styles.displayName}>{post.creator_name || post.display_name}</Text>
+                <Text style={styles.username}>@{post.creator_username || post.username}</Text>
               </View>
             </TouchableOpacity>
 
@@ -426,12 +430,22 @@ export default function PostDetailScreen({ route, navigation }) {
                 )}
               </>
             )}
+
+            {/* 漫画・シリーズ詳細 */}
             {post.series_id && (
               <TouchableOpacity
-                style={styles.seriesButton}
+                style={styles.seriesCard}
                 onPress={() => navigation?.navigate('SeriesDetail', { seriesId: post.series_id })}
+                activeOpacity={0.8}
               >
-                <Text style={styles.seriesButtonText}>📚 シリーズを見る</Text>
+                <Ionicons name="book" size={18} color={Colors.primary} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.seriesCardTitle}>{post.series_title}</Text>
+                  {post.episode_number && (
+                    <Text style={styles.seriesCardEpisode}>第{post.episode_number}話</Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={Colors.muted} />
               </TouchableOpacity>
             )}
 
@@ -481,7 +495,7 @@ export default function PostDetailScreen({ route, navigation }) {
 
             {products.length > 0 && (
               <View style={styles.productsSection}>
-                <Text style={styles.sectionTitle}>関連商品</Text>
+                <Text style={styles.sectionTitle}>🛍️ アフィリエイト</Text>
                 {products.map((product) => (
                   <View key={product.id} style={styles.productCard}>
                     {product.image_url ? (
@@ -502,6 +516,7 @@ export default function PostDetailScreen({ route, navigation }) {
                             style={[styles.platformButton, styles.amazonButton]}
                             onPress={() => handleProductClick(product.id, 'amazon')}
                           >
+                            <Ionicons name="logo-amazon" size={13} color="#fff" style={{ marginRight: 4 }} />
                             <Text style={styles.platformButtonText}>Amazon</Text>
                           </TouchableOpacity>
                         )}
@@ -779,6 +794,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
+  avatarImg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
   avatarText: {
     color: '#FFFFFF',
     fontSize: 18,
@@ -1015,6 +1036,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
     marginBottom: 8,
+  },
+  seriesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  seriesCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.foreground,
+  },
+  seriesCardEpisode: {
+    fontSize: 12,
+    color: Colors.muted,
+    marginTop: 2,
   },
   seriesButton: {
     backgroundColor: Colors.card,

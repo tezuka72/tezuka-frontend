@@ -10,6 +10,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SocketProvider } from './src/context/SocketContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { StripeProvider } from './src/utils/stripe';
 import { notificationAPI } from './src/api/client';
@@ -377,13 +378,15 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <AuthProvider>
-          <LanguageProvider>
-            <StripeProvider publishableKey={stripeKey}>
-              <NavigationContainer>
-                <AppNavigator />
-              </NavigationContainer>
-            </StripeProvider>
-          </LanguageProvider>
+          <SocketProvider>
+            <LanguageProvider>
+              <StripeProvider publishableKey={stripeKey}>
+                <NavigationContainer>
+                  <AppNavigator />
+                </NavigationContainer>
+              </StripeProvider>
+            </LanguageProvider>
+          </SocketProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </QueryClientProvider>

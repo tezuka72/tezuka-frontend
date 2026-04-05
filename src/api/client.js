@@ -136,8 +136,13 @@ export const userAPI = {
     if (!res.ok) throw new Error('Failed to upload avatar');
     return res.json(); // { avatar_url }
   },
-  getFollowing: async () => {
-    const response = await api.get('/users/me/following');
+  getFollowing: async (username) => {
+    const path = username ? `/users/${username}/following` : '/users/me/following';
+    const response = await api.get(path);
+    return response.data;
+  },
+  getFollowers: async (username) => {
+    const response = await api.get(`/users/${username}/followers`);
     return response.data;
   },
   follow: async (userId) => {

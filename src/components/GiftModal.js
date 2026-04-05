@@ -72,7 +72,7 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
         const creatorReceives = Math.ceil(selectedAmount * 0.6);
         Alert.alert(
           t('common.success'),
-          `¥${selectedAmount}${t('gift.successMessage')}¥${creatorReceives}${t('gift.successSuffix')}`
+          `${selectedAmount}pt${t('gift.successMessage')}${creatorReceives}pt${t('gift.successSuffix')}`
         );
         onClose();
       }
@@ -101,7 +101,7 @@ export default function GiftModal({ visible, onClose, receiverId, postId }) {
               >
                 <Text style={styles.emoji}>{pkg.emoji}</Text>
                 <Text style={styles.packageName}>{pkg.name}</Text>
-                <Text style={styles.packageAmount}>¥{pkg.amount}</Text>
+                <Text style={styles.packageAmount}>{pkg.amount}pt</Text>
               </TouchableOpacity>
             ))}
           </View>

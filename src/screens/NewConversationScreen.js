@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
-import { messageAPI, userAPI } from '../api/client';
+import { messageAPI, userAPI, feedAPI } from '../api/client';
 
 function Avatar({ uri, name, size = 40 }) {
   if (uri) {
@@ -33,7 +33,9 @@ export default function NewConversationScreen() {
   const [search, setSearch] = useState('');
   const [groupName, setGroupName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState(false);
+  const searchTimer = useState(null);
 
   useEffect(() => {
     userAPI.getFollowing()
@@ -42,21 +44,35 @@ export default function NewConversationScreen() {
         setUsers(list);
         setFiltered(list);
       })
-      .catch(() => Alert.alert(t('common.error'), t('newConv.loadError')))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const onSearch = (text) => {
     setSearch(text);
+    clearTimeout(searchTimer[0]);
     if (!text.trim()) {
       setFiltered(users);
-    } else {
-      const q = text.toLowerCase();
-      setFiltered(users.filter(u =>
-        (u.username || '').toLowerCase().includes(q) ||
-        (u.display_name || '').toLowerCase().includes(q)
-      ));
+      setSearching(false);
+      return;
     }
+    // 400ms デバウンスで全ユーザー検索
+    searchTimer[0] = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await feedAPI.searchUsers(text.trim());
+        setFiltered(data.users || []);
+      } catch {
+        // フォールバック: フォロー中をローカルフィルタ
+        const q = text.toLowerCase();
+        setFiltered(users.filter(u =>
+          (u.username || '').toLowerCase().includes(q) ||
+          (u.display_name || '').toLowerCase().includes(q)
+        ));
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
   };
 
   const toggleSelect = (user) => {
@@ -162,7 +178,7 @@ export default function NewConversationScreen() {
         />
       </View>
 
-      {loading ? (
+      {loading || searching ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} />
         </View>
@@ -189,7 +205,9 @@ export default function NewConversationScreen() {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.emptyText}>{t('newConv.selectUser')}</Text>
+              <Text style={styles.emptyText}>
+                {search.trim() ? 'ユーザーが見つかりませんでした' : t('newConv.selectUser')}
+              </Text>
             </View>
           }
         />

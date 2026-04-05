@@ -525,6 +525,7 @@ export default function HomeScreen({ navigation }) {
   if (error && posts.length === 0) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
+        <LinearGradient colors={['#FF3B30', '#FF9500', '#FFD60A']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📡</Text>
           <Text style={styles.emptyTitle}>{error}</Text>
@@ -538,6 +539,7 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <LinearGradient colors={['#FF3B30', '#FF9500', '#FFD60A']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
       {/* ヘッダー */}
       <View style={styles.header}>
         <View style={styles.tabs}>
@@ -627,7 +629,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    backgroundColor: Colors.background,
+    backgroundColor: '#fff',
   },
   tabs: {
     flex: 1,

@@ -41,7 +41,7 @@ export default function TopTippers({ postId }) {
       <View style={styles.tipperInfo}>
         <Text style={styles.username}>{item.display_name || item.username}</Text>
         <Text style={styles.tipAmount}>
-          ¥{parseInt(item.total_amount)} ({item.tip_count}{t('tippers.timesSuffix')})
+          {parseInt(item.total_amount)}pt ({item.tip_count}{t('tippers.timesSuffix')})
         </Text>
       </View>
     </View>

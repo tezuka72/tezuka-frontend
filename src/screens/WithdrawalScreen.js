@@ -133,17 +133,17 @@ export default function WithdrawalScreen({ navigation }) {
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>{t('withdrawal.availableBalance')}</Text>
           <Text style={styles.balanceAmount}>
-            ¥{(balance?.available_balance ?? 0).toLocaleString()}
+            {(balance?.available_balance ?? 0).toLocaleString()}pt
           </Text>
           <View style={styles.balanceDetails}>
             <View style={styles.balanceDetailItem}>
               <Text style={styles.balanceDetailLabel}>{t('withdrawal.totalEarned')}</Text>
-              <Text style={styles.balanceDetailValue}>¥{(balance?.total_earned ?? 0).toLocaleString()}</Text>
+              <Text style={styles.balanceDetailValue}>{(balance?.total_earned ?? 0).toLocaleString()}pt</Text>
             </View>
             <View style={styles.balanceDivider} />
             <View style={styles.balanceDetailItem}>
               <Text style={styles.balanceDetailLabel}>{t('withdrawal.totalWithdrawn')}</Text>
-              <Text style={styles.balanceDetailValue}>¥{(balance?.total_withdrawn ?? 0).toLocaleString()}</Text>
+              <Text style={styles.balanceDetailValue}>{(balance?.total_withdrawn ?? 0).toLocaleString()}pt</Text>
             </View>
           </View>
         </View>
@@ -179,7 +179,7 @@ export default function WithdrawalScreen({ navigation }) {
             <Text style={styles.sectionTitle}>{t('withdrawal.requestTitle')}</Text>
             <Text style={styles.minAmountNote}>{t('withdrawal.minAmountNote')}</Text>
             <View style={styles.amountRow}>
-              <Text style={styles.yenSign}>¥</Text>
+              <Text style={styles.yenSign}>pt</Text>
               <TextInput
                 style={styles.amountInput}
                 value={amount}
@@ -216,7 +216,7 @@ export default function WithdrawalScreen({ navigation }) {
             {history.map((req) => (
               <View key={req.id} style={styles.historyItem}>
                 <View style={styles.historyLeft}>
-                  <Text style={styles.historyAmount}>¥{parseInt(req.amount).toLocaleString()}</Text>
+                  <Text style={styles.historyAmount}>{parseInt(req.amount).toLocaleString()}pt</Text>
                   <Text style={styles.historyDate}>
                     {new Date(req.requested_at).toLocaleDateString('ja-JP')}
                   </Text>

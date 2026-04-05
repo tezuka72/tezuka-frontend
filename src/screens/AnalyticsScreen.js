@@ -153,7 +153,7 @@ export default function AnalyticsScreen({ route, navigation }) {
       {/* ギフト収益 */}
       <Text style={styles.sectionTitle}>ギフト収益</Text>
       <View style={styles.statRow}>
-        <StatCard label="累計ギフト額" value={`¥${Number(giftEarnings.total_gift_earnings || 0).toLocaleString()}`} color={Colors.primary} />
+        <StatCard label="累計ギフト額" value={`${Number(giftEarnings.total_gift_earnings || 0).toLocaleString()}pt`} color={Colors.primary} />
         <StatCard label="ギフト数" value={giftEarnings.gift_count} color={Colors.violet} />
       </View>
 

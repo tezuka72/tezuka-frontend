@@ -8,6 +8,10 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Modal,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,8 +29,8 @@ import LibraryBookCard from '../components/LibraryBookCard';
 function MiniPostCard({ post, onPress, onDelete }) {
   const firstImage = post.images?.[0]?.image_url || post.images?.[0];
 
-  const handleLongPress = () => {
-    if (!onDelete) return;
+  const handleDeletePress = (e) => {
+    e.stopPropagation?.();
     Alert.alert(
       '投稿を削除',
       `「${post.title}」を削除しますか？\nこの操作は取り消せません。`,
@@ -41,9 +45,9 @@ function MiniPostCard({ post, onPress, onDelete }) {
     <TouchableOpacity
       style={styles.miniCard}
       onPress={onPress}
-      onLongPress={handleLongPress}
+      onLongPress={onDelete ? handleDeletePress : undefined}
+      delayLongPress={500}
       activeOpacity={0.85}
-      delayLongPress={400}
     >
       {firstImage ? (
         <Image source={{ uri: firstImage }} style={styles.miniImage} contentFit="cover" cachePolicy="memory-disk" />
@@ -53,11 +57,6 @@ function MiniPostCard({ post, onPress, onDelete }) {
         </View>
       )}
       <Text style={styles.miniTitle} numberOfLines={1}>{post.title}</Text>
-      {onDelete && (
-        <View style={styles.deleteHint}>
-          <Ionicons name="ellipsis-horizontal" size={12} color={Colors.muted} />
-        </View>
-      )}
     </TouchableOpacity>
   );
 }
@@ -251,6 +250,62 @@ export default function ProfileScreen({ route, navigation }) {
   const [userPosts, setUserPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(false);
 
+  // フォロー一覧モーダル
+  const [followModal, setFollowModal] = useState(null); // null | 'followers' | 'following'
+  const [followList, setFollowList] = useState([]);
+  const [followListLoading, setFollowListLoading] = useState(false);
+
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const PARTIAL_H = SCREEN_HEIGHT * 0.5;
+  const FULL_H = SCREEN_HEIGHT;
+  const sheetHeight = useRef(new Animated.Value(PARTIAL_H)).current;
+  const isExpanded = useRef(false);
+
+  const snapSheet = (toFull) => {
+    isExpanded.current = toFull;
+    Animated.spring(sheetHeight, {
+      toValue: toFull ? FULL_H : PARTIAL_H,
+      useNativeDriver: false,
+      bounciness: 4,
+    }).start();
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
+      onPanResponderMove: (_, gs) => {
+        const base = isExpanded.current ? FULL_H : PARTIAL_H;
+        const next = Math.max(PARTIAL_H * 0.4, Math.min(FULL_H, base - gs.dy));
+        sheetHeight.setValue(next);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy < -40) {
+          snapSheet(true);
+        } else if (gs.dy > 40) {
+          if (isExpanded.current) {
+            snapSheet(false);
+          } else {
+            Animated.timing(sheetHeight, { toValue: 0, duration: 200, useNativeDriver: false }).start(() => {
+              setFollowModal(null);
+              sheetHeight.setValue(PARTIAL_H);
+              isExpanded.current = false;
+            });
+          }
+        } else {
+          snapSheet(isExpanded.current);
+        }
+      },
+    })
+  ).current;
+
+  const closeFollowModal = () => {
+    Animated.timing(sheetHeight, { toValue: 0, duration: 180, useNativeDriver: false }).start(() => {
+      setFollowModal(null);
+      sheetHeight.setValue(PARTIAL_H);
+      isExpanded.current = false;
+    });
+  };
+
   useEffect(() => {
     loadProfile();
     loadUserPosts();
@@ -305,6 +360,27 @@ export default function ProfileScreen({ route, navigation }) {
       }
     } catch (e) {
       console.error('Follow error:', e);
+    }
+  };
+
+  const openFollowModal = async (type) => {
+    sheetHeight.setValue(PARTIAL_H);
+    isExpanded.current = false;
+    setFollowModal(type);
+    setFollowList([]);
+    setFollowListLoading(true);
+    try {
+      if (type === 'followers') {
+        const res = await userAPI.getFollowers(profile.username);
+        setFollowList(res.followers || []);
+      } else {
+        const res = await userAPI.getFollowing(profile.username);
+        setFollowList(res.following || res.users || []);
+      }
+    } catch (e) {
+      console.error('Follow list error:', e);
+    } finally {
+      setFollowListLoading(false);
     }
   };
 
@@ -415,14 +491,14 @@ export default function ProfileScreen({ route, navigation }) {
         )}
 
         <View style={styles.stats}>
-          <View style={styles.statItem}>
+          <TouchableOpacity style={styles.statItem} onPress={() => openFollowModal('followers')} activeOpacity={0.7}>
             <Text style={styles.statValue}>{profile.follower_count || 0}</Text>
             <Text style={styles.statLabel}>{t('profile.followers')}</Text>
-          </View>
-          <View style={styles.statItem}>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.statItem} onPress={() => openFollowModal('following')} activeOpacity={0.7}>
             <Text style={styles.statValue}>{profile.following_count || 0}</Text>
             <Text style={styles.statLabel}>{t('profile.following')}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {!isOwnProfile && (
@@ -556,6 +632,64 @@ export default function ProfileScreen({ route, navigation }) {
           )}
         </ScrollView>
       )}
+
+      {/* フォロワー/フォロー中モーダル */}
+      <Modal
+        visible={followModal !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={closeFollowModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeFollowModal} activeOpacity={1} />
+          <Animated.View style={[styles.followModalSheet, { height: sheetHeight }]}>
+            {/* ドラッグハンドル */}
+            <View style={styles.followModalHandleWrap} {...panResponder.panHandlers}>
+              <View style={styles.followModalHandle} />
+            </View>
+            <Text style={styles.followModalTitle}>
+              {followModal === 'followers' ? 'フォロワー' : 'フォロー中'}
+            </Text>
+            {followListLoading ? (
+              <ActivityIndicator color={Colors.primary} style={{ marginTop: 24 }} />
+            ) : followList.length === 0 ? (
+              <Text style={styles.followModalEmpty}>
+                {followModal === 'followers' ? 'フォロワーはいません' : 'フォロー中のユーザーはいません'}
+              </Text>
+            ) : (
+              <FlatList
+                data={followList}
+                keyExtractor={item => String(item.id)}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.followUserItem}
+                    onPress={() => {
+                      closeFollowModal();
+                      navigation?.navigate('UserProfile', { username: item.username });
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.followUserAvatar}>
+                      {item.avatar_url ? (
+                        <Image source={{ uri: item.avatar_url }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
+                      ) : (
+                        <Text style={styles.followUserAvatarText}>
+                          {(item.display_name || item.username || '?')[0].toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.followUserName}>{item.display_name || item.username}</Text>
+                      <Text style={styles.followUserUsername}>@{item.username}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: Colors.border }} />}
+              />
+            )}
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -824,14 +958,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     padding: 8,
   },
-  deleteHint: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 10,
-    padding: 3,
-  },
   // 空状態
   emptyContainer: {
     alignItems: 'center',
@@ -866,5 +992,74 @@ const styles = StyleSheet.create({
     color: '#C92A2A',
     fontSize: 14,
     fontWeight: '500',
+  },
+
+  // フォロワー/フォロー中モーダル
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  followModalSheet: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 40,
+    overflow: 'hidden',
+  },
+  followModalHandleWrap: {
+    paddingTop: 12,
+    paddingBottom: 4,
+    alignItems: 'center',
+  },
+  followModalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginBottom: 8,
+  },
+  followModalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.foreground,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  followModalEmpty: {
+    color: Colors.muted,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 32,
+  },
+  followUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  followUserAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  followUserAvatarText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  followUserName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.foreground,
+  },
+  followUserUsername: {
+    fontSize: 12,
+    color: Colors.muted,
+    marginTop: 2,
   },
 });

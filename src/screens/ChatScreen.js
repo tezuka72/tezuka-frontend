@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { messageAPI, userAPI } from '../api/client';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -113,6 +114,7 @@ function MessageItem({ msg, isMine, isGroup, onLongPress, onReactionToggle, read
 export default function ChatScreen() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { registerMessageHandler, clearUnread } = useSocket() || {};
   const navigation = useNavigation();
   const route = useRoute();
   const { conversation } = route.params || {};
@@ -241,36 +243,53 @@ export default function ChatScreen() {
 
   // ポーリング: 新着メッセージ + 既読者を更新
   const pollNewMessages = useCallback(async () => {
-    try {
-      const [msgData, readersData] = await Promise.all([
-        messageAPI.getMessages(currentConvId),
-        messageAPI.getReaders(currentConvId),
-      ]);
-      const fresh = msgData.messages || [];
+    // メッセージと既読情報を独立して取得（片方の失敗が他方をブロックしない）
+    const [msgData, readersData] = await Promise.allSettled([
+      messageAPI.getMessages(currentConvId),
+      messageAPI.getReaders(currentConvId),
+    ]);
+
+    if (msgData.status === 'fulfilled') {
+      const fresh = msgData.value.messages || [];
       if (fresh.length > 0) {
-        // latestId による最適化チェックを廃止:
-        // 自分が送ったメッセージ(高ID)が newestIdRef に設定された後、
-        // それより前に送られた相手のメッセージ(低ID)を見逃すバグを修正。
-        // 毎回 existingIds で差分チェックするため re-render は新着時のみ発生。
         setMessages(prev => {
           const existingIds = new Set(prev.map(m => m.id));
           const newOnes = fresh.filter(m => !existingIds.has(m.id));
-          if (newOnes.length === 0) return prev; // 新着なし→再描画なし
+          if (newOnes.length === 0) return prev;
           newestIdRef.current = fresh[fresh.length - 1].id;
           return [...prev, ...newOnes];
         });
         messageAPI.markRead(currentConvId).catch(() => {});
       }
-      setReaders(readersData.readers || []);
-    } catch {}
+    }
+
+    if (readersData.status === 'fulfilled') {
+      setReaders(readersData.value.readers || []);
+    }
   }, [currentConvId]);
 
-  // フォーカス時に既読更新とポーリング開始
+  // Socket経由のリアルタイム受信
+  useEffect(() => {
+    if (!registerMessageHandler) return;
+    const unregister = registerMessageHandler((convId, message) => {
+      if (convId !== currentConvId) return;
+      setMessages(prev => {
+        if (prev.find(m => m.id === message.id)) return prev;
+        newestIdRef.current = message.id;
+        return [...prev, message];
+      });
+      messageAPI.markRead(currentConvId).catch(() => {});
+    });
+    return unregister;
+  }, [registerMessageHandler, currentConvId]);
+
+  // フォーカス時に既読更新・未読バッジクリア・ポーリング開始
   useFocusEffect(useCallback(() => {
     messageAPI.markRead(currentConvId).catch(() => {});
+    clearUnread?.(currentConvId);
     pollingRef.current = setInterval(pollNewMessages, POLL_INTERVAL);
     return () => clearInterval(pollingRef.current);
-  }, [currentConvId, pollNewMessages]));
+  }, [currentConvId, pollNewMessages, clearUnread]));
 
   const sendMessage = async () => {
     const content = text.trim();

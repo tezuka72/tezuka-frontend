@@ -57,26 +57,26 @@ export default function EarningsDashboardScreen() {
         <View style={styles.totalCard}>
           <Text style={styles.totalLabel}>{t('earnings.total')}</Text>
           <Text style={styles.totalValue}>
-            ¥{earnings?.total || 0}
+            {earnings?.total || 0}pt
           </Text>
         </View>
 
         <View style={styles.statsGrid}>
           <StatCard
             title={t('earnings.tips')}
-            value={`¥${earnings?.tips || 0}`}
+            value={`${earnings?.tips || 0}pt`}
             icon="💝"
             color={Colors.rose}
           />
           <StatCard
             title={t('earnings.subscriptions')}
-            value={`¥${earnings?.subscriptions || 0}`}
+            value={`${earnings?.subscriptions || 0}pt`}
             icon="⭐"
             color={Colors.amber}
           />
           <StatCard
             title={t('earnings.affiliates')}
-            value={`¥${earnings?.affiliates || 0}`}
+            value={`${earnings?.affiliates || 0}pt`}
             icon="📢"
             color={Colors.cyan}
           />
@@ -87,7 +87,7 @@ export default function EarningsDashboardScreen() {
           <View style={styles.detailCard}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>{t('earnings.thisMonth')}</Text>
-              <Text style={styles.detailValue}>¥{earnings?.thisMonth || 0}</Text>
+              <Text style={styles.detailValue}>{earnings?.thisMonth || 0}pt</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>{t('earnings.growth')}</Text>

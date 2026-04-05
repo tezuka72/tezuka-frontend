@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   RefreshControl, ActivityIndicator, Modal, TextInput,
@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { feedAPI, postAPI, messageAPI } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { Colors } from '../theme/colors';
 import { Shadows } from '../theme/styles';
 
@@ -190,8 +191,9 @@ function CreateRoomModal({ visible, onClose, onCreate }) {
       setName('');
       setDesc('');
       onClose();
-    } catch {
-      Alert.alert('エラー', 'ルームの作成に失敗しました');
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'ルームの作成に失敗しました';
+      Alert.alert('エラー', msg);
     } finally {
       setLoading(false);
     }
@@ -245,6 +247,7 @@ export default function SocialScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { unreadConvIds, registerMessageHandler, clearAllUnread } = useSocket() || {};
   const navigation = useNavigation();
   const [tab, setTab] = useState('friends'); // 'friends' | 'messages' | 'open'
 
@@ -311,6 +314,22 @@ export default function SocialScreen() {
     loadRooms();
   }, [loadPosts, loadConversations, loadRooms]));
 
+  // Socket: reload conversations when a new message arrives
+  useEffect(() => {
+    if (!registerMessageHandler) return;
+    const unregister = registerMessageHandler(() => {
+      loadConversations();
+    });
+    return unregister;
+  }, [registerMessageHandler, loadConversations]);
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    if (newTab === 'messages') {
+      clearAllUnread?.();
+    }
+  };
+
   const handleLike = async (postId) => {
     try {
       const post = posts.find(p => p.id === postId);
@@ -368,7 +387,7 @@ export default function SocialScreen() {
         <View style={styles.segmentRow}>
           <TouchableOpacity
             style={[styles.segmentBtn, tab === 'friends' && styles.segmentActive]}
-            onPress={() => setTab('friends')}
+            onPress={() => handleTabChange('friends')}
           >
             <Ionicons
               name={tab === 'friends' ? 'people' : 'people-outline'}
@@ -383,14 +402,19 @@ export default function SocialScreen() {
 
           <TouchableOpacity
             style={[styles.segmentBtn, tab === 'messages' && styles.segmentActive]}
-            onPress={() => setTab('messages')}
+            onPress={() => handleTabChange('messages')}
           >
-            <Ionicons
-              name={tab === 'messages' ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'}
-              size={15}
-              color={tab === 'messages' ? Colors.primary : Colors.muted}
-              style={{ marginRight: 4 }}
-            />
+            <View style={{ position: 'relative', flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons
+                name={tab === 'messages' ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'}
+                size={15}
+                color={tab === 'messages' ? Colors.primary : Colors.muted}
+                style={{ marginRight: 4 }}
+              />
+              {unreadConvIds?.size > 0 && (
+                <View style={styles.tabBadge} />
+              )}
+            </View>
             <Text style={[styles.segmentText, tab === 'messages' && styles.segmentTextActive]}>
               DM
             </Text>
@@ -398,7 +422,7 @@ export default function SocialScreen() {
 
           <TouchableOpacity
             style={[styles.segmentBtn, tab === 'open' && styles.segmentActive]}
-            onPress={() => setTab('open')}
+            onPress={() => handleTabChange('open')}
           >
             <Ionicons
               name={tab === 'open' ? 'earth' : 'earth-outline'}
@@ -614,6 +638,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   newBtn: { paddingLeft: 12, padding: 4 },
+  tabBadge: {
+    position: 'absolute',
+    top: -2,
+    right: 2,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
+  },
 
   // 共通
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
